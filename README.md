@@ -10,6 +10,8 @@ P_0 is the delegated party. Build the executable `micfis` and check usage.
 go build && ./micfis -h
 
 ```
+
+```
 Usage of ./micfis:
   -b int
         number of bits (hash map size = 2^b) (default 17)
