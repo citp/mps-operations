@@ -8,7 +8,6 @@
 P_0 is the delegated party. Build the executable `micfis` and check usage.
 ```
 go build && ./micfis -h
-
 ```
 
 ```
