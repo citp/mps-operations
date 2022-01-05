@@ -1,5 +1,7 @@
 package main
 
+import "math/big"
+
 // #############################################################################
 
 func BlindWorker(a WorkerCtx, b interface{}) interface{} {
@@ -8,8 +10,10 @@ func BlindWorker(a WorkerCtx, b interface{}) interface{} {
 	arg, ok := b.(BlindInput)
 	Assert(ok)
 	var output DHOutput
-	output.Q = ctx.ctx.HashToCurve(arg.x)
-	ctx.ctx.EC_Multiply(ctx.sk, output.Q, &output.S)
+	var h DHElement
+	ctx.ctx.HashToCurve(arg.x, &h)
+	// output.Q = ctx.ctx.HashToCurve(arg.x)
+	ctx.ctx.EC_Multiply(ctx.sk, h, &output.S)
 	return output
 }
 
@@ -28,8 +32,7 @@ func ReduceWorker(a WorkerCtx, b interface{}) interface{} {
 	arg, ok := b.(ReduceInput)
 	Assert(ok)
 	var output DHOutput
-	var beta, gamma DHScalar
-	ctx.ctx.DH_Reduce(arg.P, ctx.L, arg.H, &beta, &gamma, &output.Q, &output.S)
+	output.Q, output.S = ctx.ctx.DH_Reduce(ctx.L, arg.H, arg.P)
 	return output
 }
 
@@ -39,9 +42,11 @@ func UnblindWorker(a WorkerCtx, b interface{}) interface{} {
 	arg, ok := b.(UnblindInput)
 	Assert(ok)
 	var SComp DHElement
+	zero := new(big.Int)
+	nonZero := (zero.Cmp(arg.Q.x) != 0 && zero.Cmp(arg.S.x) != 0)
+	Assert(nonZero)
 	ctx.ctx.EC_Multiply(ctx.sk, arg.Q, &SComp)
-	res := (arg.S.x.Cmp(SComp.x) == 0 && arg.S.y.Cmp(SComp.y) == 0)
-	if res {
+	if arg.S.x.Cmp(SComp.x) == 0 && arg.S.y.Cmp(SComp.y) == 0 {
 		return 1
 	}
 	return 0

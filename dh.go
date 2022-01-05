@@ -2,22 +2,21 @@ package main
 
 import (
 	"crypto/elliptic"
+	crand "crypto/rand"
 	"math/big"
 	"strings"
 )
 
 // #############################################################################
 
-func NewDHContext() DHContext {
-	var ret DHContext
+func NewDHContext(ret *DHContext) {
 	ret.Curve = elliptic.P256()
 	ret.G = DHElement{ret.Curve.Params().Gx, ret.Curve.Params().Gy}
-	return ret
 }
 
-func NewDHElement() DHElement {
-	return DHElement{big.NewInt(0), big.NewInt(0)}
-}
+// func NewDHElement(e *DHElement) {
+// 	*e = DHElement{big.NewInt(0), big.NewInt(0)}
+// }
 
 func (ctx *DHContext) EC_BaseMultiply(s DHScalar, ret *DHElement) {
 	ret.x, ret.y = ctx.Curve.ScalarBaseMult((*s).Bytes())
@@ -31,26 +30,27 @@ func (ctx *DHContext) EC_Add(a, b DHElement, ret *DHElement) {
 	ret.x, ret.y = ctx.Curve.Add(a.x, a.y, b.x, b.y)
 }
 
-func (ctx *DHContext) DH_Reduce(P, L, H DHElement, beta, gamma *DHScalar, Q, S *DHElement) {
-	var t1, t2 DHElement
-	*beta = RandomScalar(ctx.Curve.Params().P)
-	*gamma = RandomScalar(ctx.Curve.Params().P)
-	ctx.EC_Multiply(*beta, H, &t1)
-	ctx.EC_Multiply(*gamma, ctx.G, &t2)
-	ctx.EC_Add(t1, t2, Q)
-	ctx.EC_Multiply(*beta, P, &t1)
-	ctx.EC_Multiply(*gamma, L, &t2)
-	ctx.EC_Add(t1, t2, S)
+func (ctx *DHContext) DH_Reduce(L, T, P DHElement) (DHElement, DHElement) {
+	var t1, t2, Q, S DHElement
+	beta := ctx.RandomScalar()
+	gamma := ctx.RandomScalar()
+	ctx.EC_Multiply(beta, T, &t1)
+	ctx.EC_Multiply(gamma, ctx.G, &t2)
+	ctx.EC_Add(t1, t2, &Q)
+	ctx.EC_Multiply(beta, P, &t1)
+	ctx.EC_Multiply(gamma, L, &t2)
+	ctx.EC_Add(t1, t2, &S)
+	return Q, S
 }
 
 // #############################################################################
 
-func (ctx *DHContext) LegendreSym(z *big.Int) *big.Int {
-	p := ctx.Curve.Params().P
-	exp := new(big.Int).Sub(p, big.NewInt(1))
-	exp = exp.Div(exp, big.NewInt(2))
-	return new(big.Int).Exp(z, exp, p)
-}
+// func (ctx *DHContext) LegendreSym(z *big.Int) *big.Int {
+// 	p := ctx.Curve.Params().P
+// 	exp := new(big.Int).Sub(p, big.NewInt(1))
+// 	exp = exp.Div(exp, big.NewInt(2))
+// 	return new(big.Int).Exp(z, exp, p)
+// }
 
 func (ctx *DHContext) SquareRootModP(z *big.Int) *big.Int {
 	p := ctx.Curve.Params().P
@@ -69,23 +69,33 @@ func (ctx *DHContext) YfromX(x *big.Int) *big.Int {
 	return ctx.SquareRootModP(y2)
 }
 
-func (ctx *DHContext) HashToCurve(s string) DHElement {
+func (ctx *DHContext) HashToCurve(s string, e *DHElement) {
 	buf := []byte(s)
 	p := ctx.Curve.Params().P
 	for {
-		bufHash := Blake2b(buf)
+		// bufHash := Blake2b(buf)
+		bufHash := BLAKE2B(buf, "HashToCurve")
 		x := new(big.Int).SetBytes(bufHash)
 		x = x.Mod(x, p)
 		y := ctx.YfromX(x)
 		if ctx.Curve.IsOnCurve(x, y) {
-			return DHElement{x, y}
+			e.x, e.y = x, y
+			return
+			// return DHElement{x, y}
 		}
-		buf = Blake2b(bufHash)
+		buf = bufHash
+		// buf = Blake2b(bufHash)
 	}
 }
 
+// func (ctx *DHContext) HashToField(s string, count int) []*big.Int {
+
+// }
+
 func (ctx *DHContext) RandomScalar() *big.Int {
-	return RandomScalar(ctx.Curve.Params().P)
+	ret, err := crand.Int(crand.Reader, ctx.Curve.Params().P)
+	Check(err)
+	return ret
 }
 
 func (ctx *DHContext) RandomElement(ret *DHElement) {
@@ -98,6 +108,26 @@ func (p *DHElement) String() string {
 	return p.x.Text(16) + "," + p.y.Text(16)
 }
 
+func (p *DHElement) Serialize() []byte {
+	ret := p.x.Bytes()
+	sign := p.y.Sign() + 2
+	return append(ret, byte(sign))
+}
+
+func DHElementFromBytes(ctx *DHContext, b []byte) DHElement {
+	Assert(len(b) == 33)
+	x := new(big.Int).SetBytes(b[:32])
+	y := ctx.YfromX(x)
+	if int(b[32])-2 != y.Sign() {
+		y.Neg(y)
+	}
+	return DHElement{x, y}
+}
+
+func (p *DHElement) ByteSize() int {
+	return 33
+}
+
 func BigIntFrom(s string) *big.Int {
 	ret := big.NewInt(0)
 	ret, ok := ret.SetString(s, 16)
@@ -108,7 +138,7 @@ func BigIntFrom(s string) *big.Int {
 	return ret
 }
 
-func DHElementFrom(s string) DHElement {
+func DHElementFromString(s string) DHElement {
 	strs := strings.Split(s, ",")
 	return DHElement{BigIntFrom(strs[0]), BigIntFrom(strs[1])}
 }

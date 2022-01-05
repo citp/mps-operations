@@ -5,23 +5,24 @@ import (
 	"log"
 	"math/big"
 	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 // #############################################################################
 
 type Party struct {
-	id  int
-	n   int
-	ctx DHContext
-	X   []string
-	log *log.Logger
+	id, n, nBits int
+	ctx          DHContext
+	X            []string
+	log          *log.Logger
+	showP        bool
 }
 
 type Delegate struct {
 	party Party
 	sk    DHScalar
 	L     DHElement
-	M     *HashMapValues
 }
 
 // #############################################################################
@@ -63,6 +64,7 @@ type WorkerCtx interface{}
 type WorkerFunc func(WorkerCtx, interface{}) interface{}
 
 type WorkerPool struct {
+	bar     *progressbar.ProgressBar
 	nJobs   uint64
 	InChan  InputChannel
 	OutChan OutputChannel
