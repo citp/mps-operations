@@ -506,18 +506,6 @@ func E_FN(m, x0, xi, i float64, nParties int, mpsi bool) float64 {
 		xi *= float64(nParties)
 		xi -= i
 		fmt.Println(xi)
-		// fnRate += (1 - E_FullSlots(m, xi)/float64(xi))
-		// expI := float64(i) * (1 - fnRate)
-		// for j := 1; j < nParties; j++ {
-		// 	fmt.Println(expI)
-		// 	// fnRate += (1 - E_FullSlots(m, xi)/float64(xi))
-		// 	// fmt.Println(j, float64(i)*(1-fnRate), P_SlotsCollided(m, float64(i)*(1-fnRate), xi))
-		// 	// fnRate += 1 - P_SlotsCollided(m, float64(i)*(1-fnRate), xi)
-		// 	expI = expI - (expI * (1 - E_FullSlots(m, xi)/float64(xi)))
-
-		// }
-		// return expI
-		// fnRate += ((1 - E_FullSlots(m, xi)/float64(xi)) * float64(nParties-1))
 	}
 	fnRate += (1 - E_FullSlots(m, xi)/float64(xi))
 	return float64(i) * (1 - fnRate)
