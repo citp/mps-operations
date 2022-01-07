@@ -72,6 +72,7 @@ func (ctx *DHContext) YfromX(x *big.Int) *big.Int {
 func (ctx *DHContext) HashToCurve(s string, e *DHElement) {
 	buf := []byte(s)
 	p := ctx.Curve.Params().P
+	count := 0
 	for {
 		// bufHash := Blake2b(buf)
 		bufHash := BLAKE2B(buf, "HashToCurve")
@@ -80,17 +81,15 @@ func (ctx *DHContext) HashToCurve(s string, e *DHElement) {
 		y := ctx.YfromX(x)
 		if ctx.Curve.IsOnCurve(x, y) {
 			e.x, e.y = x, y
+			// fmt.Println("count", count)
 			return
 			// return DHElement{x, y}
 		}
+		count += 1
 		buf = bufHash
 		// buf = Blake2b(bufHash)
 	}
 }
-
-// func (ctx *DHContext) HashToField(s string, count int) []*big.Int {
-
-// }
 
 func (ctx *DHContext) RandomScalar() *big.Int {
 	ret, err := crand.Int(crand.Reader, ctx.Curve.Params().P)

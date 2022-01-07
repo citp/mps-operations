@@ -103,7 +103,7 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 // #############################################################################
 
 func main() {
-	// Experiment()
+	Experiment()
 	mainProtocol()
 }
 
