@@ -11,7 +11,7 @@ func BlindWorker(a WorkerCtx, b interface{}) interface{} {
 	Assert(ok)
 	var output DHOutput
 	var h DHElement
-	ctx.ctx.HashToCurve_13(arg.x, &h)
+	HashToCurve_13(arg.x, &h, ctx.ctx.Curve)
 	// output.Q = ctx.ctx.HashToCurve(arg.x)
 	ctx.ctx.EC_Multiply(ctx.sk, h, &output.S)
 	return output

@@ -1,12 +1,71 @@
 package main
 
 import (
+	"crypto/elliptic"
 	"crypto/sha256"
-	"fmt"
 	"math"
 	"math/big"
-	// "golang.org/x/crypto/sha3"
 )
+
+/* -------------------------------------------------------------------------- */
+
+var zero big.Int = *new(big.Int).SetInt64(0)
+var one big.Int = *new(big.Int).SetInt64(1)
+var two big.Int = *new(big.Int).SetInt64(2)
+var three big.Int = *new(big.Int).SetInt64(3)
+var four big.Int = *new(big.Int).SetInt64(4)
+
+/* -------------------------------------------------------------------------- */
+
+type HashFunction func([]byte) []byte
+
+type HtoCParams struct {
+	A, B, q, Z *big.Int
+	DST        string
+	k, m, L, h int
+	H          HashFunction
+	b, s       int
+}
+
+func NewHtoCParams(suite string) (*HtoCParams, error) {
+	var A, B, q, Z *big.Int
+	var DST string
+	var k, m, L, h, b, s int
+	var ok bool
+	var H HashFunction
+
+	switch suite {
+	case "P256_XMD:SHA-256_SSWU_RO_":
+		A = new(big.Int).SetInt64(-3)
+		B, ok = new(big.Int).SetString("5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b", 16)
+		Assert(ok)
+		q, ok = new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
+		Assert(ok)
+		Z = new(big.Int).SetInt64(-10)
+		DST = "QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_"
+		k = 128
+		m = 1
+		h = 1
+		H = SHA256
+		b = 32
+		s = 64
+	case "P384_XMD:SHA-384_SSWU_RO_":
+		A = new(big.Int).SetInt64(-3)
+		B, ok = new(big.Int).SetString("b3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef", 16)
+		Assert(ok)
+		q, ok = new(big.Int).SetString("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff", 16)
+		Assert(ok)
+		Z = new(big.Int).SetInt64(-12)
+		k = 192
+		m = 1
+		h = 1
+	}
+
+	L = int(math.Ceil(float64(q.BitLen()+k) / 8)) // expansion size in bytes
+	return &HtoCParams{A, B, q, Z, DST, k, m, L, h, H, b, s}, nil
+}
+
+/* -------------------------------------------------------------------------- */
 
 func CMOV(a, b interface{}, c bool) interface{} {
 	if c {
@@ -14,10 +73,6 @@ func CMOV(a, b interface{}, c bool) interface{} {
 	}
 	return a
 }
-
-// func Concat(a, b []byte) []byte {
-// 	return append(a, b...)
-// }
 
 // big endian
 func I2OSP(val *big.Int, length int) []byte {
@@ -40,15 +95,8 @@ func Inv0(x, p *big.Int) *big.Int {
 }
 
 func IsSquare(x, p *big.Int) bool {
-	var r, exp, one, two big.Int
-	two.SetInt64(2)
-	one.SetInt64(1)
-
-	// fmt.Println("two", two.Text(16))
-	// fmt.Println("p", p.Text(16))
+	var r, exp big.Int
 	exp.Div(exp.Sub(p, &one), &two)
-	// exp.Sub(p, exp.SetInt64(1))
-	// fmt.Println("(p-1)/2", exp.Text(16))
 	r.Exp(x, &exp, p)
 
 	return (r.Cmp(exp.SetUint64(0)) == 0) || (r.Cmp(exp.SetUint64(1)) == 0)
@@ -56,13 +104,11 @@ func IsSquare(x, p *big.Int) bool {
 
 // big endian
 func OS2IP(octets []byte) *big.Int {
-	// fmt.Println(new(big.Int).SetBytes(octets).Text(16))
 	return new(big.Int).SetBytes(octets)
 }
 
 func Sgn0(x, p *big.Int) int {
-	var r, two big.Int
-	two.SetInt64(2)
+	var r big.Int
 	x.Mod(x, p)
 
 	return int(r.Mod(x, &two).Int64())
@@ -74,73 +120,42 @@ func SHA256(msg []byte) []byte {
 }
 
 func Sqrt(x, p *big.Int) *big.Int {
-	var one, four, p1, exp big.Int
-	one.SetInt64(1)
-	four.SetInt64(4)
+	var p1, exp big.Int
 	p1.Add(p, &one)
 	exp.Div(&p1, &four)
-
-	// fmt.Println("p1 ", p1.Text(16))
-	// fmt.Println("exp", exp.Text(16))
-
 	return new(big.Int).Exp(x, &exp, p)
 }
 
-func SqrtRatio(u, v big.Int, p *big.Int) (bool, big.Int) {
-	var c1, c2, Z, tv1, tv2, tv3, y1, y2, y big.Int
-	Z.SetInt64(-10)
-	c1.Div(c1.Sub(p, c1.SetInt64(3)), c1.SetInt64(4))
-	c2.Set(Sqrt(c2.Neg(&Z), p))
+func (params *HtoCParams) SqrtRatio3Mod4(u, v *big.Int) (bool, big.Int) {
+	var c1, c2, tv1, tv2, tv3, y1, y2, y big.Int
+	c1.Div(c1.Sub(params.q, &three), &four)
+	c2.Set(Sqrt(c2.Neg(params.Z), params.q))
 
 	//    1. tv1 = v^2
-	tv1.Exp(&v, tv1.SetInt64(2), p)
-
+	tv1.Exp(v, &two, params.q)
 	//    2. tv2 = u * v
-	tv2.Mul(&u, &v)
-
+	tv2.Mul(u, v)
 	//    3. tv1 = tv1 * tv2
 	tv1.Mul(&tv1, &tv2)
-
 	//    4. y1 = tv1^c1
-	y1.Exp(&tv1, &c1, p)
-
+	y1.Exp(&tv1, &c1, params.q)
 	//    5. y1 = y1 * tv2
 	y1.Mul(&y1, &tv2)
-
 	//    6. y2 = y1 * c2
 	y2.Mul(&y1, &c2)
-
 	//    7. tv3 = y1^2
-	tv3.Exp(&y1, tv3.SetInt64(2), p)
-
+	tv3.Exp(&y1, &two, params.q)
 	//    8. tv3 = tv3 * v
-	tv3.Mul(&tv3, &v)
-
+	tv3.Mul(&tv3, v)
 	//    9. isQR = tv3 == u
-	tv3.Mod(&tv3, p)
-	u.Mod(&u, p)
-	isQR := (tv3.Cmp(&u) == 0)
-	fmt.Println("isQR", isQR)
-
+	tv3.Mod(&tv3, params.q)
+	u.Mod(u, params.q)
+	isQR := (tv3.Cmp(u) == 0)
 	//    10. y = CMOV(y2, y1, isQR)
 	y = CMOV(y2, y1, isQR).(big.Int)
-
 	//    11. return (isQR, y)
-	// y.Mod(&y, p)
 	return isQR, y
 }
-
-// func SqrtRatioSimple(u, v big.Int, p *big.Int) (bool, big.Int) {
-// 	var r, Z big.Int
-// 	Z.SetInt64(-10)
-
-// 	r.Mul(&u, r.ModInverse(&v, p))
-// 	if IsSquare(&r, p) {
-// 		return true, *Sqrt(&r, p)
-// 	} else {
-// 		return false, *Sqrt(r.Mul(&r, &Z), p)
-// 	}
-// }
 
 func XOR(a, b []byte) []byte {
 	Assert(len(a) == len(b))
@@ -153,304 +168,138 @@ func XOR(a, b []byte) []byte {
 
 /* -------------------------------------------------------------------------- */
 
-// From https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-13#section-5.4.2
-
-// func ExpandMessageXOF(msg, DST string, len_in_bytes int) []byte {
-// 	H := sha3.NewShake128()
-// 	DST_prime := Concat([]byte(DST), I2OSP(big.NewInt(int64(len(DST))), 1))
-// 	msg_prime := Concat(Concat([]byte(msg), I2OSP(big.NewInt(int64(len_in_bytes)), 2)), DST_prime)
-// 	uniform_bytes := make([]byte, len_in_bytes)
-// 	H.Write(msg_prime)
-// 	H.Read(uniform_bytes)
-// 	return uniform_bytes
-// }
-
-/* -------------------------------------------------------------------------- */
-
 // From https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-13#section-5.3
 
-func HashToField(p *big.Int, msg string, count int) []big.Int {
-	k := 128                                       // security level
-	m := 1                                         // extension degee for P-256
-	L := int(math.Ceil(float64(p.BitLen()+k) / 8)) // expansion size in bytes
-	DST := "QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_"
-
-	len_in_bytes := count * m * L
-	uniform_bytes := ExpandMessageXMD(msg, DST, len_in_bytes)
-
+func (params *HtoCParams) HashToField(msg string, count int) []big.Int {
+	len_in_bytes := count * params.m * params.L
+	uniform_bytes := params.ExpandMessageXMD(msg, params.DST, len_in_bytes)
 	u := make([]big.Int, count)
 	for i := 0; i < count; i++ {
-		elm_offset := L * i
-		u[i].Mod(OS2IP(uniform_bytes[elm_offset:elm_offset+L]), p)
+		elm_offset := params.L * i
+		u[i].Mod(OS2IP(uniform_bytes[elm_offset:elm_offset+params.L]), params.q)
 	}
 	return u
 }
 
-func ExpandMessageXMD(msg, DST string, len_in_bytes int) []byte {
-	b_in_bytes := uint64(32)
-	s_in_bytes := uint64(64)
-
+func (params *HtoCParams) ExpandMessageXMD(msg, DST string, len_in_bytes int) []byte {
 	// 1. ell = ceil(len_in_bytes / b_in_bytes)
-	ell := math.Ceil(float64(len_in_bytes) / float64(b_in_bytes))
-
+	ell := math.Ceil(float64(len_in_bytes) / float64(params.b))
 	// 2.  ABORT if ell > 255
 	Assert(ell <= 255)
-
 	// 3.  DST_prime = DST || I2OSP(len(DST), 1)
 	DST_prime := DST + string(I2OSP_int(len(DST), 1))
-
 	// 4.  Z_pad = I2OSP(0, s_in_bytes)
-	Z_pad := string(I2OSP_int(0, int(s_in_bytes)))
-
+	Z_pad := string(I2OSP_int(0, params.s))
 	// 5.  l_i_b_str = I2OSP(len_in_bytes, 2)
 	l_i_b_str := string(I2OSP_int(len_in_bytes, 2))
-
 	// 6.  msg_prime = Z_pad || msg || l_i_b_str || I2OSP(0, 1) || DST_prime
 	msg_prime := Z_pad + msg + l_i_b_str + string(I2OSP_int(0, 1)) + DST_prime
-
 	b := make([][]byte, int(ell+1))
 	// 7.  b_0 = H(msg_prime)
-	b[0] = SHA256([]byte(msg_prime))
-
+	b[0] = params.H([]byte(msg_prime))
 	// 8.  b_1 = H(b_0 || I2OSP(1, 1) || DST_prime)
-	b[1] = SHA256([]byte(string(b[0]) + string(I2OSP_int(1, 1)) + DST_prime))
+	b[1] = params.H([]byte(string(b[0]) + string(I2OSP_int(1, 1)) + DST_prime))
 	uniform_bytes := string(b[1])
 	// 9.  for i in (2, ..., ell):
 	for i := 2; i < len(b); i++ {
 		// 10.    b_i = H(strxor(b_0, b_(i - 1)) || I2OSP(i, 1) || DST_prime)
-		b[i] = SHA256([]byte(string(XOR(b[0], b[i-1])) + string(I2OSP_int(i, 1)) + DST_prime))
+		b[i] = params.H([]byte(string(XOR(b[0], b[i-1])) + string(I2OSP_int(i, 1)) + DST_prime))
 		// 11. uniform_bytes = b_1 || ... || b_ell
 		uniform_bytes += string(b[i])
 	}
-
 	// 12. return substr(uniform_bytes, 0, len_in_bytes)
 	return []byte(uniform_bytes[0:len_in_bytes])
 }
 
-func MapToCurveSimpleSWU(p, u *big.Int) DHElement {
-	var tv1, tv2, tv3, tv4, tv5, tv6, x, y, A, B, Z, zero big.Int
-
-	zero.SetInt64(0)
-	Z.SetInt64(-10)
-	A.SetInt64(-3)
-	B.SetString("5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b", 16)
-
+func (params *HtoCParams) MapToCurveSWUStraight(u *big.Int) DHElement {
+	var tv1, tv2, tv3, tv4, tv5, tv6, x, y big.Int
 	//  1.  tv1 = u^2
-	tv1.Exp(u, tv1.SetInt64(2), p)
-
+	tv1.Exp(u, &two, params.q)
 	//  2.  tv1 = Z * tv1
-	tv1.Mul(&Z, &tv1)
-
+	tv1.Mul(params.Z, &tv1)
 	//  3.  tv2 = tv1^2
-	tv2.Exp(&tv1, tv2.SetInt64(2), p)
-
+	tv2.Exp(&tv1, &two, params.q)
 	//  4.  tv2 = tv2 + tv1
 	tv2.Add(&tv2, &tv1)
-
 	//  5.  tv3 = tv2 + 1
-	tv3.Add(&tv2, tv3.SetInt64(1))
-
+	tv3.Add(&tv2, &one)
 	//  6.  tv3 = B * tv3
-	tv3.Mul(&B, &tv3)
-
+	tv3.Mul(params.B, &tv3)
 	//  7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
-	tv2.Mod(&tv2, p)
-	tv4 = CMOV(Z, *tv4.Neg(&tv2), tv2.Cmp(&zero) != 0).(big.Int)
-
+	tv2.Mod(&tv2, params.q)
+	tv4 = CMOV(params.Z, *tv4.Neg(&tv2), tv2.Cmp(&zero) != 0).(big.Int)
 	//  8.  tv4 = A * tv4
-	tv4.Mul(&A, &tv4)
-
+	tv4.Mul(params.A, &tv4)
 	//  9.  tv2 = tv3^2
-	tv2.Exp(&tv3, tv2.SetInt64(2), p)
-
+	tv2.Exp(&tv3, &two, params.q)
 	//  10. tv6 = tv4^2
-	tv6.Exp(&tv4, tv6.SetInt64(2), p)
-
+	tv6.Exp(&tv4, &two, params.q)
 	//  11. tv5 = A * tv6
-	tv5.Mul(&A, &tv6)
-
+	tv5.Mul(params.A, &tv6)
 	//  12. tv2 = tv2 + tv5
 	tv2.Add(&tv2, &tv5)
-
 	//  13. tv2 = tv2 * tv3
 	tv2.Mul(&tv2, &tv3)
-
 	//  14. tv6 = tv6 * tv4
 	tv6.Mul(&tv6, &tv4)
-
 	//  15. tv5 = B * tv6
-	tv5.Mul(&B, &tv6)
-
+	tv5.Mul(params.B, &tv6)
 	//  16. tv2 = tv2 + tv5
 	tv2.Add(&tv2, &tv5)
-
 	//  17.   x = tv1 * tv3
 	x.Mul(&tv1, &tv3)
-
 	//  18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
-	is_gx1_square, y1 := SqrtRatio(tv2, tv6, p)
-	// is_gx1_square, y1 := SqrtRatioSimple(tv2, tv6, p)
-	// fmt.Println("is_gx1_square", is_gx1_square)
-
+	is_gx1_square, y1 := params.SqrtRatio3Mod4(&tv2, &tv6)
 	//  19.   y = tv1 * u
 	y.Mul(&tv1, u)
-
 	//  20.   y = y * y1
 	y.Mul(&y, &y1)
-
 	//  21.   x = CMOV(x, tv3, is_gx1_square)
 	x = CMOV(x, tv3, is_gx1_square).(big.Int)
-
 	//  22.   y = CMOV(y, y1, is_gx1_square)
 	y = CMOV(y, y1, is_gx1_square).(big.Int)
-	// fmt.Println("tv3", y1.Text(16))
-	// fmt.Println("y1", y1.Text(16))
-
 	//  23.  e1 = sgn0(u) == sgn0(y)
-	e1 := (Sgn0(u, p) == Sgn0(&y, p))
-	// fmt.Println("e1", e1)
-
+	e1 := (Sgn0(u, params.q) == Sgn0(&y, params.q))
 	//  24.   y = CMOV(-y, y, e1)
 	y = CMOV(*new(big.Int).Neg(&y), y, e1).(big.Int)
-
 	//  25.   x = x / tv4
-	x.Mul(&x, tv4.ModInverse(&tv4, p))
-
+	x.Mul(&x, tv4.ModInverse(&tv4, params.q))
 	//  26. return (x, y)
-	x.Mod(&x, p)
-	y.Mod(&y, p)
+	x.Mod(&x, params.q)
+	y.Mod(&y, params.q)
 	return DHElement{&x, &y}
 }
 
-func MapToCurveSWU(p, u *big.Int) DHElement {
-	var zero, one, two, three, four, Z, A, B big.Int
-
-	// p := ctx.Curve.Params().P
-	zero.SetInt64(0)
-	one.SetInt64(1)
-	two.SetInt64(2)
-	three.SetInt64(3)
-	four.SetInt64(4)
-	// 115792089210356248762697446949407573530086143415290314195533631308867097853941
-	// Z.SetString("ffffffff00000001000000000000000000000000fffffffffffffffffffffff5", 16)
-	Z.SetInt64(-10)
-	Z.Mod(&Z, p)
-	// A.SetString("ffffffff00000001000000000000000000000000fffffffffffffffffffffffc", 16)
-	A.SetInt64(-3)
-	A.Mod(&A, p)
-	B.SetString("5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b", 16)
-	// fmt.Println("A", A.Text(16))
-	// fmt.Println("B", B.Text(16))
-	// fmt.Println("Z", Z.Text(16))
-
-	var arg, tv1, x1, gx1, x2, gx2, x, y big.Int
-	var z2, u4, u2, z2u4, zu2 big.Int
-
-	z2.Exp(&Z, &two, p)
-	u2.Exp(u, &two, p)
-	u4.Exp(u, &four, p)
-	z2u4.Mul(&z2, &u4)
-	zu2.Mul(&Z, &u2)
-
-	// 1. tv1 = inv0(Z^2 * u^4 + Z * u^2) mod p
-	arg.Add(&z2u4, &zu2)
-	tv1 = *Inv0(&arg, p)
-	tv1.Mod(&tv1, p)
-
-	var negB, Ainv, negBAinv, tv1one big.Int
-	negB.Neg(&B)
-	Ainv.ModInverse(&A, p)
-	negBAinv.Mul(&negB, &Ainv)
-	tv1one.Add(&one, &tv1)
-
-	// fmt.Println("negB", negB.Text(16))
-	// fmt.Println("Ainv", Ainv.Text(16))
-	// fmt.Println("negBAinv", negBAinv.Text(16))
-	// fmt.Println("tv1one", tv1one.Text(16))
-
-	// 2.  x1 = (-B / A) * (1 + tv1) mod p
-	x1.Mul(&negBAinv, &tv1one)
-	x1.Mod(&x1, p)
-	// fmt.Println("x1", x1.Text(16))
-
-	var za, zaInv big.Int
-	za.Mul(&Z, &A)
-	zaInv.ModInverse(&za, p)
-
-	// 3.  If tv1 == 0, set x1 = B / (Z * A) mod p
-	if tv1.Cmp(&zero) == 0 {
-		// fmt.Println("tv1.Cmp(&zero) == 0")
-		x1.Mul(&B, &zaInv)
-	}
-
-	var x13, Ax1 big.Int
-	x13.Exp(&x1, &three, p)
-	Ax1.Mul(&A, &x1)
-
-	// 4. gx1 = x1^3 + A * x1 + B mod p
-	gx1.Add(new(big.Int).Add(&x13, &Ax1), &B)
-
-	// 5. x2 = Z * u^2 * x1 mod p
-	x2.Mul(new(big.Int).Mul(&Z, new(big.Int).Exp(u, &two, p)), &x1)
-
-	// 6. gx2 = x2^3 + A * x2 + B mod p
-	gx2.Add(new(big.Int).Add(new(big.Int).Exp(&x2, &three, p), new(big.Int).Mul(&A, &x2)), &B)
-
-	gx1.Mod(&gx1, p)
-	gx2.Mod(&gx2, p)
-	// 7.  If is_square(gx1), set x = x1 and y = sqrt(gx1)
-	if IsSquare(&gx1, p) {
-		// fmt.Println("IsSquare(&gx1, p)")
-		x = x1
-		y = *Sqrt(&gx1, p)
-		// fmt.Println("x", x.Text(16))
-		// fmt.Println("y", y.Text(16))
+func (params *HtoCParams) ClearCofactor(R DHElement) DHElement {
+	if params.h == 1 {
+		return R
 	} else {
-		// 8.  Else set x = x2 and y = sqrt(gx2)
-		x = x2
-		// fmt.Println("IsSquare(&gx2, p)")
-		y = *Sqrt(&gx2, p)
+		return DHElement{}
 	}
-
-	// 9.  If sgn0(u) != sgn0(y), set y = -y
-	if Sgn0(u, p) != Sgn0(&y, p) {
-		// fmt.Println("Sgn0(u, p) != Sgn0(&y, p)")
-		y.Neg(&y)
-	}
-
-	// 10. return (x, y)
-	x.Mod(&x, p)
-	y.Mod(&y, p)
-	return DHElement{&x, &y}
-}
-
-func ClearCofactor(R DHElement) DHElement {
-	// Not needed for P-256 as cofactor h = 1
-	return R
 }
 
 // from https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-13#section-3
-func (ctx *DHContext) HashToCurve_13(msg string, P *DHElement) {
-	// ctx.HashToCurve(msg, P)
+func HashToCurve_13(msg string, P *DHElement, curve elliptic.Curve) {
+	var params *HtoCParams
+	var err error
 
-	p := ctx.Curve.Params().P
-	u := HashToField(p, msg, 2)
-	// fmt.Println("u[0]", u[0].Text(16))
-	// fmt.Println("u[1]", u[1].Text(16))
-	Q0 := MapToCurveSWU(p, &u[0])
-	Q1 := MapToCurveSWU(p, &u[1])
+	switch curve.Params().Name {
+	case "P-256":
+		params, err = NewHtoCParams("P256_XMD:SHA-256_SSWU_RO_")
+		Check(err)
+	case "P-384":
+		params, err = NewHtoCParams("P384_XMD:SHA-384_SSWU_RO_")
+		Check(err)
+	}
 
-	// Q0 := MapToCurveSimpleSWU(p, &u[0])
-	// Q1 := MapToCurveSimpleSWU(p, &u[1])
+	u := params.HashToField(msg, 2)
 
-	// fmt.Println("Q0.x", Q0.x.Text(16))
-	// fmt.Println("Q0.y", Q0.y.Text(16))
-	// fmt.Println("Q1.x", Q1.x.Text(16))
-	// fmt.Println("Q1.y", Q1.y.Text(16))
+	Q0 := params.MapToCurveSWUStraight(&u[0])
+	Q1 := params.MapToCurveSWUStraight(&u[1])
 
-	Assert(ctx.Curve.IsOnCurve(Q0.x, Q0.y))
-	Assert(ctx.Curve.IsOnCurve(Q1.x, Q1.y))
+	Assert(curve.IsOnCurve(Q0.x, Q0.y))
+	Assert(curve.IsOnCurve(Q1.x, Q1.y))
 
-	ctx.EC_Add(Q0, Q1, P)
-	*P = ClearCofactor(*P)
+	Px, Py := curve.Add(Q0.x, Q0.y, Q1.x, Q1.y)
+	*P = params.ClearCofactor(DHElement{Px, Py})
 }

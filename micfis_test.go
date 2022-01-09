@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/elliptic"
 	"fmt"
 	"testing"
 
@@ -83,11 +84,8 @@ func BenchmarkMPSI_CA(b *testing.B) {
 	fmt.Printf("Cardinality: %f (true) %f (computed) %f (error)\n", card, cardComputed, ((cardComputed - card) * 100 / card))
 }
 
-func TestHashToCurveIETF13(t *testing.T) {
-	// P256_XMD:SHA-256_SSWU_RO_
-	var ctx DHContext
+func HToC_P256(t *testing.T) {
 	var P DHElement
-	NewDHContext(&ctx)
 
 	testVec := map[string][]string{
 		"": {"2c15230b26dbc6fc9a37051158c95b79656e17a1a920b11394ca91c44247d3e4",
@@ -103,21 +101,24 @@ func TestHashToCurveIETF13(t *testing.T) {
 
 	for v := range testVec {
 		p := testVec[v]
-		fmt.Println("Testing:", v)
-		ctx.HashToCurve_13(v, &P)
+		fmt.Println("msg:", v)
+		HashToCurve_13(v, &P, elliptic.P256())
 		assert.EqualValues(t, p[0], P.x.Text(16))
 		assert.EqualValues(t, p[1], P.y.Text(16))
 	}
 }
 
+func TestHashToCurveIETF13(t *testing.T) {
+	fmt.Println("Testing: P256_XMD:SHA-256_SSWU_RO_")
+	HToC_P256(t)
+}
+
 func BenchmarkHashToCurveIETF13(b *testing.B) {
-	var ctx DHContext
 	var P DHElement
-	NewDHContext(&ctx)
 
 	for i := 0; i < b.N; i++ {
 		msg := RandomString(12)
-		ctx.HashToCurve_13(msg, &P)
+		HashToCurve_13(msg, &P, elliptic.P256())
 	}
 }
 

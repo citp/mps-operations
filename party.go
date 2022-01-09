@@ -105,7 +105,7 @@ func (p *Party) MPSI_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 		}
 		val := R.data[idx]
 		if p.id == 1 {
-			p.ctx.HashToCurve_13(p.X[i], &val.Q)
+			HashToCurve_13(p.X[i], &val.Q, p.ctx.Curve)
 			val.S = M.data[idx].S
 		}
 		inputs = append(inputs, WorkerInput{idx, ReduceInput{val.Q, val.S}})
@@ -164,7 +164,7 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 		if !unmodified.Contains(idx) {
 			continue
 		}
-		p.ctx.HashToCurve_13(p.X[i], &inputData.H)
+		HashToCurve_13(p.X[i], &inputData.H, p.ctx.Curve)
 		inputData.P = M.data[idx].S
 		inputs = append(inputs, WorkerInput{idx, inputData})
 		unmodified.Remove(idx)
