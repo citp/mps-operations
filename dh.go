@@ -14,16 +14,16 @@ func NewDHContext(ret *DHContext) {
 	ret.G = DHElement{ret.Curve.Params().Gx, ret.Curve.Params().Gy}
 }
 
-// func NewDHElement(e *DHElement) {
-// 	*e = DHElement{big.NewInt(0), big.NewInt(0)}
-// }
-
 func (ctx *DHContext) EC_BaseMultiply(s DHScalar, ret *DHElement) {
 	ret.x, ret.y = ctx.Curve.ScalarBaseMult((*s).Bytes())
 }
 
 func (ctx *DHContext) EC_Multiply(s DHScalar, p DHElement, ret *DHElement) {
 	ret.x, ret.y = ctx.Curve.ScalarMult(p.x, p.y, (*s).Bytes())
+}
+
+func (ctx *DHContext) EC_Negate(a *DHElement) {
+	a.y.Neg(a.y)
 }
 
 func (ctx *DHContext) EC_Add(a, b DHElement, ret *DHElement) {
@@ -52,11 +52,15 @@ func (ctx *DHContext) DH_Reduce(L, T, P DHElement) (DHElement, DHElement) {
 // 	return new(big.Int).Exp(z, exp, p)
 // }
 
-func (ctx *DHContext) SquareRootModP(z *big.Int) *big.Int {
+func (ctx *DHContext) SquareRootModP(y2 *big.Int) *big.Int {
 	p := ctx.Curve.Params().P
 	exp := new(big.Int).Add(p, big.NewInt(1))
-	exp = exp.Div(exp, big.NewInt(4))
-	return new(big.Int).Exp(z, exp, p)
+	exp.Div(exp, big.NewInt(4))
+	// yPrimeMinus := new(big.Int).Sub(p, yPrime)
+	// if yPrime.Cmp(yPrimeMinus) == -1 {
+	// 	return yPrime
+	// }
+	return new(big.Int).Exp(y2, exp, p)
 }
 
 func (ctx *DHContext) YfromX(x *big.Int) *big.Int {
@@ -64,12 +68,12 @@ func (ctx *DHContext) YfromX(x *big.Int) *big.Int {
 	three := big.NewInt(3)
 	x3 := new(big.Int).Exp(x, three, p)
 	y2 := new(big.Int).Sub(x3, new(big.Int).Mul(three, x))
-	y2 = y2.Add(y2, ctx.Curve.Params().B)
-	y2 = y2.Mod(y2, p)
+	y2.Add(y2, ctx.Curve.Params().B)
+	y2.Mod(y2, p)
 	return ctx.SquareRootModP(y2)
 }
 
-func (ctx *DHContext) HashToCurve(s string, e *DHElement) {
+func (ctx *DHContext) HashToCurve_BF(s string, e *DHElement) {
 	buf := []byte(s)
 	p := ctx.Curve.Params().P
 	count := 0
@@ -101,6 +105,14 @@ func (ctx *DHContext) RandomElement(ret *DHElement) {
 	ctx.EC_BaseMultiply(ctx.RandomScalar(), ret)
 }
 
+func (ctx *DHContext) RandomElements(n int) []DHElement {
+	ret := make([]DHElement, n)
+	for i := 0; i < n; i++ {
+		ctx.EC_BaseMultiply(ctx.RandomScalar(), &ret[i])
+	}
+	return ret
+}
+
 // #############################################################################
 
 func (p *DHElement) String() string {
@@ -109,7 +121,10 @@ func (p *DHElement) String() string {
 
 func (p *DHElement) Serialize() []byte {
 	ret := p.x.Bytes()
-	sign := p.y.Sign() + 2
+	ret = append(make([]byte, 32-len(ret)), ret...) // Pad to 32 bytes
+
+	// sign := p.y.Sign() + 2
+	sign := new(big.Int).Mod(p.y, &two).Int64() + 2
 	return append(ret, byte(sign))
 }
 
@@ -117,8 +132,13 @@ func DHElementFromBytes(ctx *DHContext, b []byte) DHElement {
 	Assert(len(b) == 33)
 	x := new(big.Int).SetBytes(b[:32])
 	y := ctx.YfromX(x)
-	if int(b[32])-2 != y.Sign() {
-		y.Neg(y)
+	parity := new(big.Int).Mod(y, &two).Int64()
+
+	if int64(b[32])-2 != parity {
+		// fmt.Println(b[32], y.Sign())
+		y.Sub(ctx.Curve.Params().P, y)
+		// y.Neg(y)
+		// y.Mod(y, ctx.Curve.Params().P)
 	}
 	return DHElement{x, y}
 }

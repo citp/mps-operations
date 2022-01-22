@@ -48,15 +48,17 @@ func RunInit(nParties, nBits int, fpaths []string, lPath string, showP bool) (De
 	var delegate Delegate
 	var watch Stopwatch
 	var times []time.Duration
+	var ctx EGContext
 
 	// Initialize
 	watch.Reset()
-	delegate.Init(0, nParties, nBits, fpaths[0], lPath, showP)
+	NewEGContext(&ctx, 3, 33)
+	delegate.Init(0, nParties, nBits, fpaths[0], lPath, showP, &ctx)
 	times = append(times, watch.Elapsed())
 
 	for i := 1; i <= nParties; i++ {
 		watch.Reset()
-		parties[i-1].Init(i, nParties, nBits, fpaths[i], lPath, showP)
+		parties[i-1].Init(i, nParties, nBits, fpaths[i], lPath, showP, &ctx)
 		times = append(times, watch.Elapsed())
 	}
 
@@ -68,6 +70,7 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 	var times []time.Duration
 	// Round1
 	var M, R HashMapValues
+	var final *HashMapFinal
 	M = NewHashMap(delegate.party.nBits)
 
 	watch.Reset()
@@ -76,18 +79,18 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 	for i := 0; i < nParties; i++ {
 		if proto == 1 {
 			watch.Reset()
-			parties[i].MPSI_CA(delegate.L, &M, &R)
+			final = parties[i].MPSI_CA(delegate.L, &M, &R)
 			times = append(times, watch.Elapsed())
 		} else if proto == 2 {
 			watch.Reset()
-			parties[i].MPSIU_CA(delegate.L, &M, &R)
+			final = parties[i].MPSIU_CA(delegate.L, &M, &R)
 			times = append(times, watch.Elapsed())
 		}
 	}
 
 	// Round2
 	watch.Reset()
-	cardComputed := delegate.Round2(&R)
+	cardComputed, _ := delegate.Round2(final)
 	times = append(times, watch.Elapsed())
 
 	delegate.party.log.Printf("Computation: %d EC point mul.\n", delegate.party.TComputation(proto, &R))
@@ -97,7 +100,7 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 		parties[i].log.Printf("Communication: %f MB\n", float64(delegate.party.TCommunication(&R))/1e6)
 	}
 
-	return cardComputed, times
+	return float64(cardComputed), times
 }
 
 // #############################################################################
@@ -108,7 +111,7 @@ func main() {
 }
 
 func mainProtocol() {
-	var nParties, nHashes0, nHashesI, intCard, nBits, proto int
+	var nParties, nHashes0, nHashesI, intCard, lim, nBits, proto int
 	var dataDir, resDir string
 	var eProfile, showP bool
 
@@ -117,6 +120,7 @@ func mainProtocol() {
 	flag.IntVar(&nHashes0, "h0", 1000, "|x_0|")
 	flag.IntVar(&nHashesI, "hi", 10000, "|x_i|")
 	flag.IntVar(&intCard, "i", 1000, "|intersection(x_0,...,x_n)|")
+	flag.IntVar(&lim, "l", 1000, "upper bound on associated integers")
 	flag.IntVar(&nBits, "b", 17, "number of bits (hash map size = 2^b)")
 	flag.StringVar(&dataDir, "d", "data", "directory containing hashes")
 	flag.StringVar(&resDir, "r", "results", "results directory")
@@ -147,8 +151,8 @@ func mainProtocol() {
 	_ = os.Mkdir(dataDir, os.ModePerm)
 	_ = os.Mkdir(resDir, os.ModePerm)
 
-	data := NewSampleData(nParties+1, nHashes0, nHashesI, intCard, dataDir, false, (proto == 1))
-	res := data.ComputeStats()
+	data := NewSampleData(nParties+1, nHashes0, nHashesI, intCard, lim, dataDir, false, (proto == 1))
+	res := data.ComputeStats((proto == 1))
 	card1, card2 := res[0], res[1]
 	card = card1
 	if proto == 2 {

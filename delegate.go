@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
@@ -8,10 +10,22 @@ import (
 
 // #############################################################################
 
-func (d *Delegate) Init(id, n, nBits int, dPath, lPath string, showP bool) {
-	d.party.Init(id, n, nBits, dPath, lPath, showP)
-	d.sk = d.party.ctx.RandomScalar()
-	d.party.ctx.EC_BaseMultiply(d.sk, &d.L)
+func (p *Party) RunParallelDelegate(R *HashMapValues, pool *WorkerPool, fn WorkerFunc, ctx WorkerCtx) {
+	res := pool.Run(fn, ctx)
+	for i := 0; i < len(res); i++ {
+		data, ok := res[i].data.(DHOutput)
+		Assert(ok)
+		R.DHData[res[i].id] = HashMapValue{data.Q, data.S}
+		R.EGData[res[i].id] = data.Ct
+	}
+}
+
+// #############################################################################
+
+func (d *Delegate) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *EGContext) {
+	d.party.Init(id, n, nBits, dPath, lPath, showP, ctx)
+	d.alpha = d.party.ctx.ecc.RandomScalar()
+	d.party.ctx.ecc.EC_BaseMultiply(d.alpha, &d.L)
 }
 
 func (d *Delegate) Round1(M *HashMapValues) {
@@ -22,14 +36,19 @@ func (d *Delegate) Round1(M *HashMapValues) {
 		bar = NewProgressBar(len(d.party.X), "cyan", "[1/2] Blinding")
 	}
 
+	*M = NewHashMap(d.party.nBits)
 	pool := NewWorkerPool(uint64(len(d.party.X)), bar)
 	unmodified := GetBitMap(M.Size())
-	for i := 0; i < len(d.party.X); i++ {
-		idx := GetIndex(d.party.X[i], M.nBits)
-		pool.InChan <- WorkerInput{idx, BlindInput{d.party.X[i]}}
+	// fmt.Println(len(d.party.X))
+	for w, v := range d.party.X {
+		idx := GetIndex(w, M.nBits)
+		pool.InChan <- WorkerInput{idx, BlindInput{w, v}}
 		unmodified.Remove(idx)
 	}
-	d.party.RunParallel(M, pool, BlindWorker, BlindCtx{&d.party.ctx, d.sk})
+
+	// var pk DHElement
+	// d.party.ctx.EG_PubKey(d.party.partial_sk, &pk)
+	d.party.RunParallelDelegate(M, pool, BlindWorker, BlindCtx{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
 
 	filled := uint64(M.Size()) - unmodified.GetCardinality()
 	d.party.log.Printf("filled slots=%d (expected=%f) / prop=%f\n", filled, E_FullSlots(float64(M.Size()), float64(len(d.party.X))), float64(filled)/float64(len(d.party.X)))
@@ -42,31 +61,56 @@ func (d *Delegate) Round1(M *HashMapValues) {
 	for k.HasNext() {
 		pool.InChan <- WorkerInput{k.Next(), RandomizeInput{}}
 	}
-	d.party.RunParallel(M, pool, RandomizeWorker, DHCtx{&d.party.ctx, d.L})
+	d.party.RunParallelDelegate(M, pool, RandomizeDelegateWorker, BlindCtx{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
+
+	// DHCtx{&d.party.ctx.ecc, d.L}
 }
 
-func (d *Delegate) Round2(R *HashMapValues) float64 {
+func (d *Delegate) Round2(R *HashMapFinal) (int, EGCiphertext) {
 	defer Timer(time.Now(), d.party.log)
 	var bar *progressbar.ProgressBar
 
-	sz := len(R.data)
-	count := 0.0
+	sz := len(R.Q)
 
 	if d.party.showP {
 		bar = NewProgressBar(sz, "cyan", "[1/1] Unblinding")
 	}
 	pool := NewWorkerPool(uint64(sz), bar)
 	for i := 0; i < sz; i++ {
-		pool.InChan <- WorkerInput{uint64(i), UnblindInput{R.data[i].Q, R.data[i].S}}
+		pool.InChan <- WorkerInput{uint64(i), UnblindInput{R.Q[i], R.AES[i]}}
 	}
-	res := pool.Run(UnblindWorker, BlindCtx{&d.party.ctx, d.sk})
+	res := pool.Run(UnblindWorker, BlindCtx{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
 
+	var ctSum EGCiphertext
+	// var pt big.Int
+
+	first := true
+	count := 0
 	for i := 0; i < len(res); i++ {
-		data, ok := res[i].data.(int)
-		Assert(ok)
-		count += float64(data)
+		data, _ := res[i].data.(*EGCiphertext)
+		if data != nil {
+			count += 1
+			// d.party.ctx.EG_Decrypt(d.party.partial_sk, &pt, data)
+			// fmt.Println("pt =>", pt.Text(10))
+			if first {
+				ctSum = *data
+				first = false
+			} else {
+				d.party.ctx.EG_AddInplace(&ctSum, data)
+			}
+		}
 	}
+	fmt.Println("Count:", count)
+
+	// d.party.ctx.EG_Decrypt(d.party.partial_sk, &pt, &ctSum)
+	// fmt.Println("Sum:", pt.Text(10))
 
 	// fmt.Printf("ExpectedCollidedIndices=%f", ExpectedCollidedIndices(d.nBits, d.party.n, len(d.party.X)))
-	return count
+	return count, ctSum
+}
+
+func (d *Delegate) Round3(ctSum *EGCiphertext, partials [][]DHElement) big.Int {
+	var result big.Int
+	d.party.ctx.EGMP_AggDecrypt(partials, &result, ctSum)
+	return result
 }

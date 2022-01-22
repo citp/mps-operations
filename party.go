@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/big"
 	"math/rand"
 	"os"
 	"time"
@@ -17,15 +18,35 @@ func (p *Party) RunParallel(R *HashMapValues, pool *WorkerPool, fn WorkerFunc, c
 	for i := 0; i < len(res); i++ {
 		data, ok := res[i].data.(DHOutput)
 		Assert(ok)
-		R.data[res[i].id] = HashMapValue(data)
+		R.DHData[res[i].id] = HashMapValue{data.Q, data.S}
 	}
 }
 
-func (p *Party) Shuffle(R *HashMapValues) {
+func (p *Party) Encrypt(M, R *HashMapValues) HashMapFinal {
+	var final HashMapFinal
+	length := len(R.DHData)
+	Assert(length == len(R.EGData))
+
+	final.Q = make([]DHElement, length)
+	final.AES = make([][]byte, length)
+
+	for i := 0; i < length; i++ {
+		final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
+		final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
+		final.AES[i] = AEAD_Encrypt(p.ctx.EG_Serialize(&M.EGData[i]), SHA256(R.DHData[i].S.Serialize()))
+	}
+	p.Shuffle(&final)
+	return final
+}
+
+func (p *Party) Shuffle(R *HashMapFinal) {
 	// rand.Seed(time.Now().UnixNano())
 	rand.Seed(0)
-	rand.Shuffle(len(R.data), func(i, j int) { R.data[i], R.data[j] = R.data[j], R.data[i] })
-	p.log.Printf("shuffled / slots=%d\n", len(R.data))
+	rand.Shuffle(len(R.Q), func(i, j int) {
+		R.Q[i], R.Q[j] = R.Q[j], R.Q[i]
+		R.AES[i], R.AES[j] = R.AES[j], R.AES[i]
+	})
+	p.log.Printf("shuffled / slots=%d\n", len(R.Q))
 }
 
 func (p *Party) TComputation(proto int, R *HashMapValues) uint64 {
@@ -61,17 +82,17 @@ func (p *Party) TComputation(proto int, R *HashMapValues) uint64 {
 func (p *Party) TCommunication(R *HashMapValues) uint64 {
 	ret := uint64(0)
 	nElems := 2*R.Size() + 1
-	ret += 2 * nElems * uint64(R.data[0].S.ByteSize())
+	ret += 2 * nElems * uint64(R.DHData[0].S.ByteSize())
 	return ret
 }
 
 // #############################################################################
 
-func (p *Party) Init(id, n, nBits int, dPath, lPath string, showP bool) {
+func (p *Party) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *EGContext) {
 	p.id = id
 	p.n = n
 	p.nBits = nBits
-	NewDHContext(&p.ctx)
+	p.ctx = *ctx
 	p.X = ReadFile(dPath)
 	p.showP = showP
 
@@ -79,9 +100,32 @@ func (p *Party) Init(id, n, nBits int, dPath, lPath string, showP bool) {
 	Check(err)
 
 	p.log = log.New(logF, fmt.Sprintf("[Party %d] ", p.id), 0)
+	p.partial_sk = ctx.ecc.RandomScalar()
+	// fmt.Println("Partial:", id, p.partial_sk.Text(10))
 }
 
-func (p *Party) MPSI_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
+func (p *Party) Partial_PubKey() DHElement {
+	var pk DHElement
+	p.ctx.EGMP_PubKey(p.partial_sk, &pk)
+	return pk
+}
+
+func (p *Party) Set_AggPubKey(pks []DHElement) {
+	p.agg_pk.x = new(big.Int).Set(pks[0].x)
+	p.agg_pk.y = new(big.Int).Set(pks[0].y)
+
+	for i := 1; i <= p.n; i++ {
+		p.ctx.ecc.EC_Add(p.agg_pk, pks[i], &p.agg_pk)
+	}
+}
+
+func (p *Party) Partial_Decrypt(ct *EGCiphertext) []DHElement {
+	return p.ctx.EGMP_Decrypt(p.partial_sk, ct)
+}
+
+// #############################################################################
+
+func (p *Party) MPSI_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
 	defer Timer(time.Now(), p.log)
 	var bar *progressbar.ProgressBar
 
@@ -98,15 +142,16 @@ func (p *Party) MPSI_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 	unmodified := GetBitMap(M.Size())
 	inputs := make([]WorkerInput, 0)
 
-	for i := 0; i < len(p.X); i++ {
-		idx := GetIndex(p.X[i], R.nBits)
+	// for i := 0; i < len(p.X); i++ {
+	for w := range p.X {
+		idx := GetIndex(w, R.nBits)
 		if !unmodified.Contains(idx) {
 			continue
 		}
-		val := R.data[idx]
+		val := R.DHData[idx]
 		if p.id == 1 {
-			HashToCurve_13(p.X[i], &val.Q, p.ctx.Curve)
-			val.S = M.data[idx].S
+			HashToCurve_13(w, &val.Q, p.ctx.ecc.Curve)
+			val.S = M.DHData[idx].S
 		}
 		inputs = append(inputs, WorkerInput{idx, ReduceInput{val.Q, val.S}})
 		unmodified.Remove(idx)
@@ -121,7 +166,7 @@ func (p *Party) MPSI_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 	modified := M.Size() - unmodified.GetCardinality()
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
 
-	dhCtx := DHCtx{&p.ctx, L}
+	dhCtx := DHCtx{&p.ctx.ecc, L}
 	p.RunParallel(R, pool, ReduceWorker, dhCtx)
 
 	// Randomize all unmodified indices
@@ -138,11 +183,14 @@ func (p *Party) MPSI_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 
 	// Shuffle if you are P_{n-1}
 	if p.id == p.n {
-		p.Shuffle(R)
+		ret := p.Encrypt(M, R)
+		return &ret
+	} else {
+		return nil
 	}
 }
 
-func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
+func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
 	defer Timer(time.Now(), p.log)
 	var bar *progressbar.ProgressBar
 
@@ -159,13 +207,14 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 	var inputData ReduceInput
 	inputs := make([]WorkerInput, 0)
 
-	for i := 0; i < len(p.X); i++ {
-		idx := GetIndex(p.X[i], M.nBits)
+	// for i := 0; i < len(p.X); i++ {
+	for w := range p.X {
+		idx := GetIndex(w, M.nBits)
 		if !unmodified.Contains(idx) {
 			continue
 		}
-		HashToCurve_13(p.X[i], &inputData.H, p.ctx.Curve)
-		inputData.P = M.data[idx].S
+		HashToCurve_13(w, &inputData.H, p.ctx.ecc.Curve)
+		inputData.P = M.DHData[idx].S
 		inputs = append(inputs, WorkerInput{idx, inputData})
 		unmodified.Remove(idx)
 	}
@@ -175,7 +224,7 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 	}
 	fmt.Println("njobs", p.id, len(inputs))
 
-	dhCtx := DHCtx{&p.ctx, L}
+	dhCtx := DHCtx{&p.ctx.ecc, L}
 	modified := M.Size() - unmodified.GetCardinality()
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
 	p.RunParallel(R, pool, ReduceWorker, dhCtx)
@@ -201,7 +250,7 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 		// DH Reduce all unmodified indices
 		for k.HasNext() {
 			idx := k.Next()
-			pool.InChan <- WorkerInput{idx, ReduceInput{R.data[idx].Q, R.data[idx].S}}
+			pool.InChan <- WorkerInput{idx, ReduceInput{R.DHData[idx].Q, R.DHData[idx].S}}
 		}
 		workerFn = ReduceWorker
 	}
@@ -215,6 +264,9 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) {
 
 	// Shuffle if you are P_{n-1}
 	if p.id == p.n {
-		p.Shuffle(R)
+		ret := p.Encrypt(M, R)
+		return &ret
+	} else {
+		return nil
 	}
 }

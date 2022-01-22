@@ -12,7 +12,8 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/RoaringBitmap/roaring/roaring64"
@@ -22,7 +23,7 @@ import (
 )
 
 // #############################################################################
-var _p *big.Int
+// var _p *big.Int
 
 func GetIndex(key string, nBits int) uint64 {
 	// var err error
@@ -53,7 +54,7 @@ func GetBitMap(sz uint64) *roaring64.Bitmap {
 // #############################################################################
 
 func NewHashMap(nBits int) HashMapValues {
-	return HashMapValues{make([]HashMapValue, 1<<nBits), nBits}
+	return HashMapValues{make([]HashMapValue, 1<<nBits), make([]EGCiphertext, 1<<nBits), nBits}
 }
 
 func (m *HashMapValues) Size() uint64 {
@@ -106,32 +107,41 @@ func RandomString(n int) string {
 
 // #############################################################################
 
-func ReadFile(fpath string) []string {
-	var ret []string
+func ReadFile(fpath string) map[string]int {
+	ret := make(map[string]int)
 	file, err := os.Open(fpath)
 	Check(err)
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		ret = append(ret, scanner.Text())
+		arr := strings.Split(scanner.Text(), "\t")
+		w := arr[0]
+		v, err := strconv.Atoi(arr[1])
+		Check(err)
+		ret[w] = v
 	}
 	Check(scanner.Err())
-
-	sort.Slice(ret, func(i, j int) bool {
-		return ret[i] < ret[j]
-	})
 	return ret
 }
 
-func WriteFile(fpath string, strs []string) {
+func WriteFile(fpath string, strs map[string]int) {
 	os.Remove(fpath)
 	file, err := os.OpenFile(fpath, os.O_CREATE|os.O_WRONLY, 0644)
 	Check(err)
-	Write(file, strs)
+	WriteMap(file, strs)
 }
 
-func Write(file *os.File, strs []string) {
+func WriteMap(file *os.File, strs map[string]int) {
+	datawriter := bufio.NewWriter(file)
+	for k, v := range strs {
+		_, _ = datawriter.WriteString(k + "\t" + strconv.Itoa(v) + "\n")
+	}
+	datawriter.Flush()
+	file.Close()
+}
+
+func WriteArray(file *os.File, strs []string) {
 	datawriter := bufio.NewWriter(file)
 	for _, data := range strs {
 		_, _ = datawriter.WriteString(data + "\n")
@@ -143,19 +153,19 @@ func Write(file *os.File, strs []string) {
 func AppendFile(fpath string, strs []string) {
 	file, err := os.OpenFile(fpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	Check(err)
-	Write(file, strs)
+	WriteArray(file, strs)
 }
 
 // #############################################################################
 
 type SampleData struct {
-	Xs      [][]string
+	X_ADs   []map[string]int
 	dataDir string
 }
 
-func NewSampleData(nParties, N0, Ni, intCard int, dataDir string, read, mpsi bool) *SampleData {
+func NewSampleData(nParties, N0, Ni, intCard, lim int, dataDir string, read, mpsi bool) *SampleData {
 	var data SampleData
-	data.Xs = make([][]string, nParties)
+	data.X_ADs = make([]map[string]int, nParties)
 	data.dataDir = dataDir
 
 	if read {
@@ -163,32 +173,33 @@ func NewSampleData(nParties, N0, Ni, intCard int, dataDir string, read, mpsi boo
 		return &data
 	}
 
+	rand.Seed(time.Now().Unix())
+
 	if mpsi {
-		data.GenerateI(N0, Ni, intCard)
+		data.GenerateI(N0, Ni, intCard, lim)
 	} else {
-		data.GenerateIU(N0, Ni, intCard)
+		data.GenerateIU(N0, Ni, intCard, lim)
 	}
+
 	data.Write()
 	data.Read()
 
 	return &data
 }
 
-func (d *SampleData) GenerateI(N0, Ni, intCard int) {
-	nParties := len(d.Xs)
-	rand.Seed(42)
+func (d *SampleData) GenerateI(N0, Ni, intCard, lim int) {
+	nParties := len(d.X_ADs)
 	sets := make([]Set, nParties)
 	var I, U Set
-	I.RandomN(intCard, 12)
-	U.RandomN(Ni*nParties*2, 12)
+	I.SetRandomN(intCard, 12, lim)
+	U.SetRandomN(Ni*nParties*2, 12, lim)
 	intersection := I.Serialize()
 	for i := 0; i < nParties; i++ {
 		sets[i] = *NewSet(intersection)
 	}
-	Ucount := make(map[string]int)
-	Uarr := U.Serialize()
-	for i := 0; i < U.Size(); i++ {
-		Ucount[Uarr[i]] = 0
+	Ucount := U.Clone()
+	for w := range Ucount.data {
+		Ucount.data[w] = 0
 	}
 
 	for i := 0; i < nParties; i++ {
@@ -197,63 +208,68 @@ func (d *SampleData) GenerateI(N0, Ni, intCard int) {
 			rem = Ni
 		}
 		for sets[i].Size() < rem {
-			k := Uarr[rand.Intn(len(Uarr))]
-			v := Ucount[k]
-			if v < nParties-1 && !sets[i].Contains(k) {
-				sets[i].Add(k)
-				Ucount[k] = v + 1
+			w := Ucount.GetRandom()
+			v := Ucount.data[w]
+			if v < nParties-1 && !sets[i].Contains(w) {
+				sets[i].Add(w, U.data[w])
+				Ucount.data[w] = v + 1
 			}
 		}
-		d.Xs[i] = sets[i].Serialize()
-		Assert(len(d.Xs[i]) == rem)
+		d.X_ADs[i] = sets[i].Serialize()
+		Assert(len(d.X_ADs[i]) == rem)
 	}
 
-	for k := 0; k < nParties; k++ {
-		sort.Slice(d.Xs[k], func(i, j int) bool {
-			return d.Xs[k][i] < d.Xs[k][j]
-		})
+	// fmt.Println(len(sets))
+	inter := &sets[0]
+	for i := 1; i < nParties; i++ {
+		inter = inter.Intersection(&sets[i])
 	}
+
+	Assert(inter.Size() == intCard)
 }
 
-func (d *SampleData) GenerateIU(N0, Ni, intCard int) {
-	rand.Seed(42)
-	nParties := len(d.Xs)
+func (d *SampleData) GenerateIU(N0, Ni, intCard, lim int) {
+	nParties := len(d.X_ADs)
 	sets := make([]Set, nParties)
 
 	var I, U1, U2 Set
-	I.RandomN(intCard, 12)
-	U1.RandomN(N0-intCard, 12)
-	U2.RandomN(Ni*nParties*2, 12)
+	I.SetRandomN(intCard, 12, lim)
+	U1.SetRandomN(N0-intCard, 12, lim)
+	U2.SetRandomN(Ni*nParties*2, 12, lim)
 
 	intersection := I.Serialize()
 	sets[0] = *NewSet(intersection)
 	sets[0] = *sets[0].Union(&U1)
-	d.Xs[0] = sets[0].Serialize()
-	Assert(len(d.Xs[0]) == N0)
+	d.X_ADs[0] = sets[0].Serialize()
+	Assert(len(d.X_ADs[0]) == N0)
 
 	for i := 1; i < nParties; i++ {
-		sets[i] = *NewSet([]string{})
+		sets[i] = *NewSet(map[string]int{})
 	}
 
-	for i := 0; i < len(intersection); i++ {
+	for w, v := range intersection {
 		num := rand.Intn(nParties-1) + 1
-		for j := 0; j < num; j++ {
+		j := 0
+		for j < num {
 			idx := rand.Intn(nParties-1) + 1
-			// fmt.Println(idx)
-			sets[idx].Add(intersection[i])
-		}
-	}
-
-	Uarr := U2.Serialize()
-	for i := 1; i < nParties; i++ {
-		for sets[i].Size() < Ni {
-			k := Uarr[rand.Intn(len(Uarr))]
-			if !sets[i].Contains(k) {
-				sets[i].Add(k)
+			if !sets[idx].Contains(w) {
+				sets[idx].Add(w, v)
+				j++
 			}
 		}
-		d.Xs[i] = sets[i].Serialize()
-		Assert(len(d.Xs[i]) == Ni)
+	}
+
+	Uarr := U2.Clone()
+	for i := 1; i < nParties; i++ {
+		for sets[i].Size() < Ni {
+			// k := Uarr[rand.Intn(len(Uarr))]
+			w := Uarr.GetRandom()
+			if !sets[i].Contains(w) {
+				sets[i].Add(w, Uarr.data[w])
+			}
+		}
+		d.X_ADs[i] = sets[i].Serialize()
+		Assert(len(d.X_ADs[i]) == Ni)
 	}
 
 	union := &sets[1]
@@ -261,32 +277,27 @@ func (d *SampleData) GenerateIU(N0, Ni, intCard int) {
 		union = union.Union(&sets[i])
 	}
 
-	for k := 0; k < nParties; k++ {
-		sort.Slice(d.Xs[k], func(i, j int) bool {
-			return d.Xs[k][i] < d.Xs[k][j]
-		})
-	}
+	Assert(union.Intersection(&sets[0]).Size() == intCard)
 }
 
 func (d *SampleData) Write() {
-	for i := 0; i < len(d.Xs); i++ {
+	for i := 0; i < len(d.X_ADs); i++ {
 		fpath := path.Join(d.dataDir, fmt.Sprintf("%d.txt", i))
-		WriteFile(fpath, d.Xs[i])
+		WriteFile(fpath, d.X_ADs[i])
 	}
 }
 
 func (d *SampleData) Read() {
-	for i := 0; i < len(d.Xs); i++ {
-		d.Xs[i] = ReadFile(path.Join(d.dataDir, fmt.Sprintf("%d.txt", i)))
+	for i := 0; i < len(d.X_ADs); i++ {
+		d.X_ADs[i] = ReadFile(path.Join(d.dataDir, fmt.Sprintf("%d.txt", i)))
 	}
 }
 
-func (d *SampleData) ComputeStats() []float64 {
-	ret := Cardinality(d.Xs)
-
+func (d *SampleData) ComputeStats(mpsi bool) []float64 {
+	ret := Cardinality(d.X_ADs, mpsi)
 	retFl := make([]float64, len(ret))
 	for i, v := range ret {
-		// fmt.Printf("%d, %d\n", i, v)
+		fmt.Printf("%d, %d\n", i, v)
 		retFl[i] = float64(v)
 	}
 
@@ -323,113 +334,131 @@ func (w *Stopwatch) Elapsed() time.Duration {
 
 // #############################################################################
 
-func NewSet(strs []string) *Set {
+func NewSet(strs map[string]int) *Set {
 	var set Set
-	set.data = make(map[string]bool)
-	for _, s := range strs {
-		set.data[s] = true
+	set.data = make(map[string]int)
+	for w, v := range strs {
+		set.data[w] = v
 	}
 	return &set
+}
+
+func (s *Set) Clone() *Set {
+	return NewSet(s.data)
 }
 
 func (s *Set) Size() int {
 	return len(s.data)
 }
 
-func (s *Set) Add(t string) {
-	s.data[t] = true
+func (s *Set) Add(w string, v int) {
+	s.data[w] = v
 }
 
-func (s *Set) Remove(t string) {
-	delete(s.data, t)
+func (s *Set) Remove(w string) {
+	delete(s.data, w)
 }
 
-func (s *Set) Contains(t string) bool {
-	_, ok := s.data[t]
+func (s *Set) Contains(w string) bool {
+	_, ok := s.data[w]
 	return ok
 }
 
 func (s *Set) Intersection(r *Set) *Set {
-	i := make(map[string]bool)
-	for k := range r.data {
-		if s.data[k] {
-			i[k] = true
+	i := make(map[string]int)
+	for w, v := range r.data {
+		vPrime, ok := s.data[w]
+		if ok {
+			Assert(v == vPrime)
+			i[w] = v
 		}
 	}
 	return &Set{i}
 }
 
 func (s *Set) Union(r *Set) *Set {
-	u := make(map[string]bool)
-	for k := range s.data {
-		u[k] = true
+	u := make(map[string]int)
+	for w, v := range s.data {
+		u[w] = v
 	}
-	for k := range r.data {
-		u[k] = true
+	for w, v := range r.data {
+		u[w] = v
 	}
 	return &Set{u}
 }
 
 func (s *Set) Difference(r *Set) *Set {
-	u := make(map[string]bool)
-	for k := range s.data {
-		u[k] = true
+	u := make(map[string]int)
+	for w, v := range s.data {
+		u[w] = v
 	}
-	for k := range r.data {
-		delete(u, k)
+	for w := range r.data {
+		delete(u, w)
 	}
 	return &Set{u}
 }
 
-func (s *Set) RandomN(n int, l int) {
-	s.data = make(map[string]bool)
+func (s *Set) SetRandomN(n int, strl, lim int) {
+	s.data = make(map[string]int)
 	for len(s.data) < n {
-		t := RandomString(l)
+		t := RandomString(strl)
 		_, ok := s.data[t]
 		if !ok {
-			s.data[t] = true
+			s.data[t] = rand.Int() % lim
 		}
 	}
 }
 
-func (s *Set) Serialize() []string {
-	ret := make([]string, s.Size())
-	idx := 0
-	for k := range s.data {
-		ret[idx] = k
-		idx += 1
+func (s *Set) GetRandom() string {
+	for w := range s.data {
+		return w
+	}
+	return ""
+}
+
+func (s *Set) Serialize() map[string]int {
+	ret := make(map[string]int)
+	for w, v := range s.data {
+		ret[w] = v
 	}
 	return ret
 }
 
+func (s *Set) ADSum() int {
+	sum := 0
+	for w, v := range s.data {
+		fmt.Println(w, "=>", v)
+		sum += v
+	}
+	return sum
+}
+
 // #############################################################################
 
-func Cardinality(Xs [][]string) []int {
-	nParties := len(Xs)
+func Cardinality(X_ADs []map[string]int, mpsi bool) []int {
+	nParties := len(X_ADs)
 	sets := make([]Set, nParties)
 	for i := 0; i < nParties; i++ {
-		sets[i] = *NewSet(Xs[i])
+		sets[i] = *NewSet(X_ADs[i])
 	}
 
-	var ret []int
-	inter := &sets[0]
-	// fmt.Println("inter.size", inter.Size())
-	for i := 1; i < nParties; i++ {
-		inter = inter.Intersection(&sets[i])
-		// fmt.Println("inter.size", inter.Size())
-		ret = append(ret, inter.Size())
+	if mpsi {
+		inter := &sets[0]
+		for i := 1; i < nParties; i++ {
+			inter = inter.Intersection(&sets[i])
+		}
+		for w := range inter.data {
+			Assert(sets[0].Contains(w))
+		}
+		return []int{inter.Size(), inter.ADSum()}
+	} else {
+		union := &sets[1]
+		for i := 2; i < nParties; i++ {
+			union = union.Union(&sets[i])
+		}
+		union = sets[0].Intersection(union)
+		return []int{union.Size(), union.ADSum()}
 	}
-
-	for i := 1; i < nParties; i++ {
-		ret = append(ret, sets[0].Intersection(&sets[i]).Size())
-	}
-
-	union := &sets[1]
-	for i := 2; i < nParties; i++ {
-		union = union.Union(&sets[i])
-	}
-	ret = append(ret, sets[0].Intersection(union).Size())
-	return ret
 }
 
 // func IntersectionWithUnionCardinality(Xs [][]string) float64 {

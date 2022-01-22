@@ -13,15 +13,17 @@ import (
 
 type Party struct {
 	id, n, nBits int
-	ctx          DHContext
-	X            []string
+	ctx          EGContext
+	X            map[string]int
 	log          *log.Logger
 	showP        bool
+	partial_sk   *big.Int
+	agg_pk       DHElement
 }
 
 type Delegate struct {
 	party Party
-	sk    DHScalar
+	alpha DHScalar
 	L     DHElement
 }
 
@@ -34,21 +36,38 @@ type DHContext struct {
 
 type DHScalar *big.Int
 type DHElement struct {
-	x *big.Int
-	y *big.Int
+	x, y *big.Int
+}
+
+type EGContext struct {
+	ecc     DHContext
+	n, Ny   []*big.Int
+	N       *big.Int
+	nModuli uint
+	table   map[string]big.Int
+}
+
+type EGCiphertext struct {
+	c1, c2 []DHElement
 }
 
 type HashMapValues struct {
-	data  []HashMapValue
-	nBits int
+	DHData []HashMapValue
+	EGData []EGCiphertext
+	nBits  int
 }
 
 type HashMapValue struct {
 	Q, S DHElement
 }
 
+type HashMapFinal struct {
+	Q   []DHElement
+	AES [][]byte
+}
+
 type Set struct {
-	data map[string]bool
+	data map[string]int
 }
 
 type ChanMsg struct {
@@ -83,12 +102,18 @@ type ReduceInput struct {
 }
 
 type BlindInput struct {
-	x string
+	w string
+	v int
 }
 
+// type BlindOutput struct {
+// 	S  DHElement
+// 	Ct EGCiphertext
+// }
+
 type UnblindInput struct {
-	Q DHElement
-	S DHElement
+	Q   DHElement
+	AES []byte
 }
 
 type DHCtx struct {
@@ -97,12 +122,17 @@ type DHCtx struct {
 }
 
 type BlindCtx struct {
-	ctx *DHContext
-	sk  DHScalar
+	ctx   *EGContext
+	alpha DHScalar
+	pk    DHElement
+	sk    DHScalar
 }
 
 type DHOutput struct {
 	Q, S DHElement
+	Ct   EGCiphertext
 }
 
 type UnblindOutput int
+
+// #############################################################################

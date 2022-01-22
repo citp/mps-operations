@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/sha512"
 	"math"
 	"math/big"
 )
@@ -56,9 +57,27 @@ func NewHtoCParams(suite string) (*HtoCParams, error) {
 		q, ok = new(big.Int).SetString("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff", 16)
 		Assert(ok)
 		Z = new(big.Int).SetInt64(-12)
+		DST = "QUUX-V01-CS02-with-P384_XMD:SHA-384_SSWU_RO_"
 		k = 192
 		m = 1
 		h = 1
+		H = SHA384
+		b = 48
+		s = 128
+	case "P521_XMD:SHA-512_SSWU_RO_":
+		A = new(big.Int).SetInt64(-3)
+		B, ok = new(big.Int).SetString("51953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00", 16)
+		Assert(ok)
+		q, ok = new(big.Int).SetString("1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+		Assert(ok)
+		Z = new(big.Int).SetInt64(-4)
+		DST = "QUUX-V01-CS02-with-P521_XMD:SHA-512_SSWU_RO_"
+		k = 256
+		m = 1
+		h = 1
+		H = SHA512
+		b = 64
+		s = 128
 	}
 
 	L = int(math.Ceil(float64(q.BitLen()+k) / 8)) // expansion size in bytes
@@ -116,6 +135,16 @@ func Sgn0(x, p *big.Int) int {
 
 func SHA256(msg []byte) []byte {
 	ret := sha256.Sum256([]byte(msg))
+	return ret[:]
+}
+
+func SHA384(msg []byte) []byte {
+	ret := sha512.Sum384([]byte(msg))
+	return ret[:]
+}
+
+func SHA512(msg []byte) []byte {
+	ret := sha512.Sum512([]byte(msg))
 	return ret[:]
 }
 
@@ -289,6 +318,9 @@ func HashToCurve_13(msg string, P *DHElement, curve elliptic.Curve) {
 		Check(err)
 	case "P-384":
 		params, err = NewHtoCParams("P384_XMD:SHA-384_SSWU_RO_")
+		Check(err)
+	case "P-521":
+		params, err = NewHtoCParams("P521_XMD:SHA-512_SSWU_RO_")
 		Check(err)
 	}
 
