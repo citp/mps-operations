@@ -86,13 +86,13 @@ func RandomBytes(n int) []byte {
 	ret := make([]byte, n)
 	nR, err := io.ReadFull(crand.Reader, ret)
 	Assert(nR == n)
-	Check(err)
+	Panic(err)
 	return ret
 }
 
 func RandomPrime(n int) *big.Int {
 	p, err := crand.Prime(crand.Reader, n)
-	Check(err)
+	Panic(err)
 	return p
 }
 
@@ -110,7 +110,7 @@ func RandomString(n int) string {
 func ReadFile(fpath string) map[string]int {
 	ret := make(map[string]int)
 	file, err := os.Open(fpath)
-	Check(err)
+	Panic(err)
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
@@ -118,17 +118,17 @@ func ReadFile(fpath string) map[string]int {
 		arr := strings.Split(scanner.Text(), "\t")
 		w := arr[0]
 		v, err := strconv.Atoi(arr[1])
-		Check(err)
+		Panic(err)
 		ret[w] = v
 	}
-	Check(scanner.Err())
+	Panic(scanner.Err())
 	return ret
 }
 
 func WriteFile(fpath string, strs map[string]int) {
 	os.Remove(fpath)
 	file, err := os.OpenFile(fpath, os.O_CREATE|os.O_WRONLY, 0644)
-	Check(err)
+	Panic(err)
 	WriteMap(file, strs)
 }
 
@@ -152,7 +152,7 @@ func WriteArray(file *os.File, strs []string) {
 
 func AppendFile(fpath string, strs []string) {
 	file, err := os.OpenFile(fpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	Check(err)
+	Panic(err)
 	WriteArray(file, strs)
 }
 
@@ -312,7 +312,7 @@ func Assert(v bool) {
 	}
 }
 
-func Check(err error) {
+func Panic(err error) {
 	if err != nil {
 		panic(err)
 	}

@@ -9,9 +9,9 @@ import (
 
 func getCipher(key []byte) cipher.AEAD {
 	block, err := aes.NewCipher(key)
-	Check(err)
+	Panic(err)
 	AES_GCM, err := cipher.NewGCM(block)
-	Check(err)
+	Panic(err)
 	return AES_GCM
 }
 

@@ -315,13 +315,13 @@ func HashToCurve_13(msg string, P *DHElement, curve elliptic.Curve) {
 	switch curve.Params().Name {
 	case "P-256":
 		params, err = NewHtoCParams("P256_XMD:SHA-256_SSWU_RO_")
-		Check(err)
+		Panic(err)
 	case "P-384":
 		params, err = NewHtoCParams("P384_XMD:SHA-384_SSWU_RO_")
-		Check(err)
+		Panic(err)
 	case "P-521":
 		params, err = NewHtoCParams("P521_XMD:SHA-512_SSWU_RO_")
-		Check(err)
+		Panic(err)
 	}
 
 	u := params.HashToField(msg, 2)

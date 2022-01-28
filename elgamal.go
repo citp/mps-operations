@@ -38,7 +38,7 @@ func (ctx *EGContext) genModuli(bitSize uint) {
 	for i < int(ctx.nModuli) {
 		// ctx.n[i], err = crand.Int(crand.Reader, new(big.Int).Lsh(&one, bitSize))
 		ctx.n[i], err = crand.Prime(crand.Reader, int(bitSize))
-		Check(err)
+		Panic(err)
 		coPrime := true
 		for j := 0; j < i; j++ {
 			gcd.GCD(nil, nil, ctx.n[i], ctx.n[j])
@@ -208,7 +208,7 @@ func (ctx *EGContext) EG_Rerandomize(pk *DHElement, ct *EGCiphertext) {
 	}
 }
 
-func (ctx *EGContext) EG_RandomCt(pk *DHElement, ct *EGCiphertext) {
+func (ctx *EGContext) EG_EncryptZero(pk *DHElement, ct *EGCiphertext) {
 	ct.c1 = make([]DHElement, ctx.nModuli)
 	ct.c2 = make([]DHElement, ctx.nModuli)
 	for i := 0; i < int(ctx.nModuli); i++ {

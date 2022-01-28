@@ -41,7 +41,7 @@ func RandomizeDelegateWorker(a WorkerCtx, b interface{}) interface{} {
 	ctx.ctx.ecc.RandomElement(&output.Q)
 	ctx.ctx.ecc.RandomElement(&output.S)
 	// var mPrime big.Int
-	ctx.ctx.EG_RandomCt(&ctx.pk, &output.Ct)
+	ctx.ctx.EG_EncryptZero(&ctx.pk, &output.Ct)
 	// ctx.ctx.EG_Decrypt(ctx.sk, &mPrime, &output.Ct)
 	// Assert(mPrime.Cmp(&zero) == 0)
 	return output

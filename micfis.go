@@ -79,7 +79,7 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 	for i := 0; i < nParties; i++ {
 		if proto == 1 {
 			watch.Reset()
-			final = parties[i].MPSI_CA(delegate.L, &M, &R)
+			final = parties[i].MPSI_S(delegate.L, &M, &R)
 			times = append(times, watch.Elapsed())
 		} else if proto == 2 {
 			watch.Reset()

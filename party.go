@@ -33,6 +33,7 @@ func (p *Party) Encrypt(M, R *HashMapValues) HashMapFinal {
 	for i := 0; i < length; i++ {
 		final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
 		final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
+		p.ctx.EG_Rerandomize(&p.agg_pk, &M.EGData[i])
 		final.AES[i] = AEAD_Encrypt(p.ctx.EG_Serialize(&M.EGData[i]), SHA256(R.DHData[i].S.Serialize()))
 	}
 	p.Shuffle(&final)
@@ -40,8 +41,8 @@ func (p *Party) Encrypt(M, R *HashMapValues) HashMapFinal {
 }
 
 func (p *Party) Shuffle(R *HashMapFinal) {
-	// rand.Seed(time.Now().UnixNano())
-	rand.Seed(0)
+	rand.Seed(time.Now().UnixNano())
+	// rand.Seed(0)
 	rand.Shuffle(len(R.Q), func(i, j int) {
 		R.Q[i], R.Q[j] = R.Q[j], R.Q[i]
 		R.AES[i], R.AES[j] = R.AES[j], R.AES[i]
@@ -97,7 +98,7 @@ func (p *Party) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *EGC
 	p.showP = showP
 
 	logF, err := os.OpenFile(lPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	Check(err)
+	Panic(err)
 
 	p.log = log.New(logF, fmt.Sprintf("[Party %d] ", p.id), 0)
 	p.partial_sk = ctx.ecc.RandomScalar()
@@ -125,7 +126,7 @@ func (p *Party) Partial_Decrypt(ct *EGCiphertext) []DHElement {
 
 // #############################################################################
 
-func (p *Party) MPSI_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
+func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
 	defer Timer(time.Now(), p.log)
 	var bar *progressbar.ProgressBar
 

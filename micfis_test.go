@@ -193,7 +193,7 @@ func AES(b *testing.B) {
 		var err error
 		for i := 0; i < b.N; i++ {
 			ptPrime[i], err = decrypt(ct[i], key)
-			Check(err)
+			Panic(err)
 		}
 		for i := 0; i < b.N; i++ {
 			Assert(bytes.Equal(ptPrime[i], pt[i]))
@@ -267,10 +267,10 @@ func BenchmarkMPSIU_AD(b *testing.B) {
 
 func BenchmarkMPSI_S(b *testing.B) {
 	nParties := 3
-	Ni := 10000
+	Ni := 100000
 	N0 := Ni / 10
 	intCard := N0 / 10
-	nBits := 19
+	nBits := 20
 	nModuli := 3
 	maxBits := 33
 	lim := 1000
@@ -285,18 +285,18 @@ func BenchmarkMPSI_S(b *testing.B) {
 	var final *HashMapFinal
 	delegate.Round1(&M)
 	for i := 0; i < nParties; i++ {
-		final = parties[i].MPSI_CA(delegate.L, &M, &R)
+		final = parties[i].MPSI_S(delegate.L, &M, &R)
 	}
 	fmt.Println("Finished: Round 1.")
 
 	// Round 2
 	cardComputed, ctSum := delegate.Round2(final)
-	fmt.Println("Finished: Round 2.")
 	partials := make([][]DHElement, nParties+1)
 	partials[0] = delegate.party.Partial_Decrypt(&ctSum)
 	for i := 1; i <= nParties; i++ {
 		partials[i] = parties[i-1].Partial_Decrypt(&ctSum)
 	}
+	fmt.Println("Finished: Round 2.")
 
 	// Round 3
 	sum := delegate.Round3(&ctSum, partials)

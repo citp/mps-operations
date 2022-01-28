@@ -97,7 +97,7 @@ func (ctx *DHContext) HashToCurve_BF(s string, e *DHElement) {
 
 func (ctx *DHContext) RandomScalar() *big.Int {
 	ret, err := crand.Int(crand.Reader, ctx.Curve.Params().P)
-	Check(err)
+	Panic(err)
 	return ret
 }
 
