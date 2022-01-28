@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"crypto/elliptic"
 	"fmt"
+	"log"
 	"math/big"
+	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -209,6 +212,9 @@ func BenchmarkAES(b *testing.B) {
 // #############################################################################
 
 func benchmarkInit(b *testing.B, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits int, proto string, showP bool) (Delegate, []Party, []float64) {
+	logger := log.New(os.Stdout, "go test: ", log.Flags())
+	defer Timer(time.Now(), logger, "benchmarkInit")
+
 	var ctx EGContext
 	var delegate Delegate
 	pks := make([]DHElement, nParties+1)
@@ -241,7 +247,7 @@ func BenchmarkMPSIU_AD(b *testing.B) {
 	Ni := 10000
 	N0 := Ni / 10
 	intCard := N0 / 10
-	nBits := 20
+	nBits := 21
 	nModuli := 3
 	maxBits := 33
 	lim := 1000
@@ -282,7 +288,6 @@ func BenchmarkMPSI_S(b *testing.B) {
 	card := res[0]
 
 	b.ResetTimer()
-	delegate.party.log.Println("---------------------------------")
 
 	// Round 1
 	var M, R HashMapValues
@@ -303,10 +308,13 @@ func BenchmarkMPSI_S(b *testing.B) {
 	fmt.Println("Finished: Round 2.")
 
 	// Round 3
-	sum := delegate.Round3(&ctSum, partials)
+	sum := delegate.JointDecryption(&ctSum, partials)
+	fmt.Println("Finished: JointDecryption")
 
 	fmt.Printf("Cardinality: %f (true) %d (computed) %f (error)\n", card, cardComputed, ((float64(cardComputed) - card) * 100 / card))
 	fmt.Println("Sum:", sum.Text(10))
+
+	delegate.party.log.Println("---------------------------------")
 }
 
 func HToC_Tester(t *testing.T, suite string, testRes [][]string, curve elliptic.Curve) {

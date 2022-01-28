@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math/big"
 	"time"
-
-	"github.com/schollz/progressbar/v3"
 )
 
 // #############################################################################
@@ -29,17 +27,12 @@ func (d *Delegate) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *
 }
 
 func (d *Delegate) DelegateStart(M *HashMapValues) {
-	defer Timer(time.Now(), d.party.log)
-	var bar *progressbar.ProgressBar
-
-	if d.party.showP {
-		bar = NewProgressBar(len(d.party.X), "cyan", "[1/2] Blinding")
-	}
+	defer Timer(time.Now(), d.party.log, "DelegateStart")
 
 	*M = NewHashMap(d.party.nBits)
-	pool := NewWorkerPool(uint64(len(d.party.X)), bar)
+	pool := NewWorkerPool(uint64(len(d.party.X)))
 	unmodified := GetBitMap(M.Size())
-	ctx := BlindCtx{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk}
+	ctx := BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk}
 	for w, v := range d.party.X {
 		idx := GetIndex(w, M.nBits)
 		pool.InChan <- WorkerInput{idx, BlindInput{w, v}}
@@ -52,33 +45,23 @@ func (d *Delegate) DelegateStart(M *HashMapValues) {
 	filled := uint64(M.Size()) - unmodified.GetCardinality()
 	d.party.log.Printf("filled slots=%d (expected=%f) / prop=%f\n", filled, E_FullSlots(float64(M.Size()), float64(len(d.party.X))), float64(filled)/float64(len(d.party.X)))
 
-	if d.party.showP {
-		bar = NewProgressBar(int(unmodified.GetCardinality()), "cyan", "[2/2] Randomizing")
-	}
-	pool = NewWorkerPool(unmodified.GetCardinality(), bar)
+	pool = NewWorkerPool(unmodified.GetCardinality())
 	k := unmodified.Iterator()
 	for k.HasNext() {
 		pool.InChan <- WorkerInput{k.Next(), RandomizeInput{}}
 	}
-	d.party.RunParallelDelegate(M, pool, RandomizeDelegateWorker, BlindCtx{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
-
-	// DHCtx{&d.party.ctx.ecc, d.L}
+	d.party.RunParallelDelegate(M, pool, RandomizeDelegateWorker, BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
 }
 
 func (d *Delegate) DelegateFinish(R *HashMapFinal) (int, EGCiphertext) {
-	defer Timer(time.Now(), d.party.log)
-	var bar *progressbar.ProgressBar
+	defer Timer(time.Now(), d.party.log, "DelegateFinish")
 
 	sz := len(R.Q)
-
-	if d.party.showP {
-		bar = NewProgressBar(sz, "cyan", "[1/1] Unblinding")
-	}
-	pool := NewWorkerPool(uint64(sz), bar)
+	pool := NewWorkerPool(uint64(sz))
 	for i := 0; i < sz; i++ {
 		pool.InChan <- WorkerInput{uint64(i), UnblindInput{R.Q[i], R.AES[i]}}
 	}
-	res := pool.Run(UnblindWorker, BlindCtx{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
+	res := pool.Run(UnblindWorker, BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
 
 	var ctSum EGCiphertext
 	// var pt big.Int
@@ -108,7 +91,9 @@ func (d *Delegate) DelegateFinish(R *HashMapFinal) (int, EGCiphertext) {
 	return count, ctSum
 }
 
-func (d *Delegate) Round3(ctSum *EGCiphertext, partials [][]DHElement) big.Int {
+func (d *Delegate) JointDecryption(ctSum *EGCiphertext, partials [][]DHElement) big.Int {
+	defer Timer(time.Now(), d.party.log, "JointDecryption")
+
 	var result big.Int
 	d.party.ctx.EGMP_AggDecrypt(partials, &result, ctSum)
 	return result

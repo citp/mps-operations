@@ -5,8 +5,6 @@ import (
 	"log"
 	"math/big"
 	"time"
-
-	"github.com/schollz/progressbar/v3"
 )
 
 // #############################################################################
@@ -83,7 +81,6 @@ type WorkerCtx interface{}
 type WorkerFunc func(WorkerCtx, interface{}) interface{}
 
 type WorkerPool struct {
-	bar     *progressbar.ProgressBar
 	nJobs   uint64
 	InChan  InputChannel
 	OutChan OutputChannel
@@ -118,7 +115,13 @@ type UnblindInput struct {
 	AES []byte
 }
 
-type BlindCtx struct {
+type BlindCtxInt struct {
+	ctx   *DHContext
+	alpha DHScalar
+	sk    []byte
+}
+
+type BlindCtxSum struct {
 	ctx   *EGContext
 	alpha DHScalar
 	pk    DHElement

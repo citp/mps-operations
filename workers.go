@@ -10,7 +10,7 @@ func BlindWorker(a WorkerCtx, b interface{}) interface{} {
 	var output DHOutput
 	var h DHElement
 	var m big.Int
-	ctx, ok := a.(BlindCtx)
+	ctx, ok := a.(BlindCtxSum)
 	Assert(ok)
 	arg, ok := b.(BlindInput)
 	Assert(ok)
@@ -35,7 +35,7 @@ func RandomizeWorker(a WorkerCtx, b interface{}) interface{} {
 }
 
 func RandomizeDelegateWorker(a WorkerCtx, b interface{}) interface{} {
-	ctx, ok := a.(BlindCtx)
+	ctx, ok := a.(BlindCtxSum)
 	Assert(ok)
 	var output DHOutput
 	ctx.ctx.ecc.RandomElement(&output.Q)
@@ -58,7 +58,7 @@ func ReduceWorker(a WorkerCtx, b interface{}) interface{} {
 }
 
 func UnblindWorker(a WorkerCtx, b interface{}) interface{} {
-	ctx, ok := a.(BlindCtx)
+	ctx, ok := a.(BlindCtxSum)
 	Assert(ok)
 	arg, ok := b.(UnblindInput)
 	Assert(ok)
@@ -66,7 +66,7 @@ func UnblindWorker(a WorkerCtx, b interface{}) interface{} {
 	zero := new(big.Int)
 	Assert(zero.Cmp(arg.Q.x) != 0)
 	ctx.ctx.ecc.EC_Multiply(ctx.alpha, arg.Q, &S)
-	key := SHA256(S.Serialize())
+	key := AES_KDF(S.Serialize())
 	ctBytes, err := AEAD_Decrypt(arg.AES, key)
 	if err == nil {
 		// var mPrime big.Int
@@ -86,7 +86,7 @@ func EncryptWorker(a WorkerCtx, b interface{}) interface{} {
 	arg, _ := b.(EncryptInput)
 
 	ctx.ctx.EG_Rerandomize(ctx.apk, arg.ct)
-	return EncryptOutput(AEAD_Encrypt(ctx.ctx.EG_Serialize(arg.ct), SHA256(arg.S.Serialize())))
+	return EncryptOutput(AEAD_Encrypt(ctx.ctx.EG_Serialize(arg.ct), AES_KDF(arg.S.Serialize())))
 }
 
 func H2CWorker(a WorkerCtx, b interface{}) interface{} {

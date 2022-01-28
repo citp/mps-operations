@@ -73,6 +73,11 @@ func BLAKE2B(msg []byte, domainSep string) []byte {
 	return []byte(h[:])
 }
 
+func AES_KDF(msg []byte) []byte {
+	h := blake2b.Sum256(msg)
+	return []byte(h[:])
+}
+
 func HashPrefix(msg []byte, sz int) uint64 {
 	Assert(sz < 64)
 	h := BLAKE2S(msg, "HashPrefix")
@@ -320,9 +325,9 @@ func Panic(err error) {
 
 // #############################################################################
 
-func Timer(start time.Time, log *log.Logger) {
+func Timer(start time.Time, log *log.Logger, text string) {
 	elapsed := time.Since(start)
-	log.Printf("%s", elapsed)
+	log.Printf("%s: %s", text, elapsed)
 }
 
 func (w *Stopwatch) Reset() {

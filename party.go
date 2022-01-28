@@ -7,8 +7,6 @@ import (
 	"math/rand"
 	"os"
 	"time"
-
-	"github.com/schollz/progressbar/v3"
 )
 
 // #############################################################################
@@ -20,42 +18,6 @@ func (p *Party) RunParallel(R *HashMapValues, pool *WorkerPool, fn WorkerFunc, c
 		Assert(ok)
 		R.DHData[res[i].id] = HashMapValue{data.Q, data.S}
 	}
-}
-
-func (p *Party) BlindEncrypt(M, R *HashMapValues) HashMapFinal {
-	var final HashMapFinal
-	length := len(R.DHData)
-	Assert(length == len(R.EGData))
-
-	final.Q = make([]DHElement, length)
-	final.AES = make([][]byte, length)
-
-	pool := NewWorkerPool(uint64(length), nil)
-	for i := 0; i < length; i++ {
-		final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
-		final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
-		pool.InChan <- WorkerInput{uint64(i), EncryptInput{&M.EGData[i], &R.DHData[i].S}}
-	}
-	res := pool.Run(EncryptWorker, EncryptCtx{&p.ctx, &p.agg_pk})
-	Assert(len(res) == length)
-
-	for i := 0; i < len(res); i++ {
-		data, ok := res[i].data.(EncryptOutput)
-		Assert(ok)
-		final.AES[res[i].id] = data
-	}
-	p.Shuffle(&final)
-	return final
-}
-
-func (p *Party) Shuffle(R *HashMapFinal) {
-	rand.Seed(time.Now().UnixNano())
-	// rand.Seed(0)
-	rand.Shuffle(len(R.Q), func(i, j int) {
-		R.Q[i], R.Q[j] = R.Q[j], R.Q[i]
-		R.AES[i], R.AES[j] = R.AES[j], R.AES[i]
-	})
-	p.log.Printf("shuffled / slots=%d\n", len(R.Q))
 }
 
 func (p *Party) TComputation(proto int, R *HashMapValues) uint64 {
@@ -98,19 +60,18 @@ func (p *Party) TCommunication(R *HashMapValues) uint64 {
 // #############################################################################
 
 func (p *Party) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *EGContext) {
+	logF, err := os.OpenFile(lPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	Panic(err)
+	p.log = log.New(logF, fmt.Sprintf("[Party %d] ", id), 0)
+	defer Timer(time.Now(), p.log, "Init")
+
 	p.id = id
 	p.n = n
 	p.nBits = nBits
 	p.ctx = *ctx
 	p.X = ReadFile(dPath)
 	p.showP = showP
-
-	logF, err := os.OpenFile(lPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	Panic(err)
-
-	p.log = log.New(logF, fmt.Sprintf("[Party %d] ", p.id), 0)
 	p.partial_sk = ctx.ecc.RandomScalar()
-	// fmt.Println("Partial:", id, p.partial_sk.Text(10))
 }
 
 func (p *Party) Partial_PubKey() DHElement {
@@ -147,7 +108,7 @@ func (p *Party) Initialize_R(M *HashMapValues, R *HashMapValues) {
 		unmodified.Remove(idx)
 	}
 
-	pool := NewWorkerPool(uint64(len(inputs)), nil)
+	pool := NewWorkerPool(uint64(len(inputs)))
 	for _, v := range inputs {
 		pool.InChan <- v
 	}
@@ -160,25 +121,56 @@ func (p *Party) Initialize_R(M *HashMapValues, R *HashMapValues) {
 		Assert(ok)
 		R.DHData[res[i].id].Q = DHElement(data)
 	}
-	fmt.Println("Finished H2C", p.id, len(inputs))
+}
+
+func (p *Party) BlindEncrypt(M, R *HashMapValues) HashMapFinal {
+	defer Timer(time.Now(), p.log, "BlindEncrypt")
+
+	var final HashMapFinal
+	length := len(R.DHData)
+	Assert(length == len(R.EGData))
+
+	final.Q = make([]DHElement, length)
+	final.AES = make([][]byte, length)
+
+	pool := NewWorkerPool(uint64(length))
+	for i := 0; i < length; i++ {
+		final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
+		final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
+		pool.InChan <- WorkerInput{uint64(i), EncryptInput{&M.EGData[i], &R.DHData[i].S}}
+	}
+	res := pool.Run(EncryptWorker, EncryptCtx{&p.ctx, &p.agg_pk})
+	Assert(len(res) == length)
+
+	for i := 0; i < len(res); i++ {
+		data, ok := res[i].data.(EncryptOutput)
+		Assert(ok)
+		final.AES[res[i].id] = data
+	}
+	p.Shuffle(&final)
+	return final
+}
+
+func (p *Party) Shuffle(R *HashMapFinal) {
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(R.Q), func(i, j int) {
+		R.Q[i], R.Q[j] = R.Q[j], R.Q[i]
+		R.AES[i], R.AES[j] = R.AES[j], R.AES[i]
+	})
+	p.log.Printf("shuffled slots=%d\n", len(R.Q))
 }
 
 // #############################################################################
 
 func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
-	defer Timer(time.Now(), p.log)
-	var bar *progressbar.ProgressBar
+	defer Timer(time.Now(), p.log, "MPSI_S")
 
 	// Initialize R if you are P_1
 	if p.id == 1 {
 		p.Initialize_R(M, R)
 	}
 
-	if p.showP {
-		bar = NewProgressBar(len(p.X), "cyan", "[1/2] Reducing")
-	}
-
-	// For all w in X, DH Reduce M[index(w)] (if P_1), DH Reduce R[index(w)] otherwise
+	// For all w in X, DH Reduce R[index(w)]
 	unmodified := GetBitMap(M.Size())
 	inputs := make([]WorkerInput, 0)
 
@@ -187,12 +179,11 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 		if !unmodified.Contains(idx) {
 			continue
 		}
-		val := R.DHData[idx]
-		inputs = append(inputs, WorkerInput{idx, ReduceInput{val.Q, val.S}})
+		inputs = append(inputs, WorkerInput{idx, ReduceInput{R.DHData[idx].Q, R.DHData[idx].S}})
 		unmodified.Remove(idx)
 	}
 
-	pool := NewWorkerPool(uint64(len(inputs)), bar)
+	pool := NewWorkerPool(uint64(len(inputs)))
 	for _, v := range inputs {
 		pool.InChan <- v
 	}
@@ -205,10 +196,7 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 	p.RunParallel(R, pool, ReduceWorker, dhCtx)
 
 	// Randomize all unmodified indices
-	if p.showP {
-		bar = NewProgressBar(int(unmodified.GetCardinality()), "cyan", "[2/2] Randomizing")
-	}
-	pool = NewWorkerPool(uint64(unmodified.GetCardinality()), bar)
+	pool = NewWorkerPool(uint64(unmodified.GetCardinality()))
 	k := unmodified.Iterator()
 	for k.HasNext() {
 		pool.InChan <- WorkerInput{k.Next(), RandomizeInput{}}
@@ -216,18 +204,16 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 	p.RunParallel(R, pool, RandomizeWorker, dhCtx)
 	p.log.Printf("randomized slots=%d\n", unmodified.GetCardinality())
 
-	// Shuffle if you are P_{n-1}
+	// Shuffle and return B if you are P_{n-1}
 	if p.id == p.n {
-		ret := p.BlindEncrypt(M, R)
-		return &ret
-	} else {
-		return nil
+		B := p.BlindEncrypt(M, R)
+		return &B
 	}
+	return nil
 }
 
 func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
-	defer Timer(time.Now(), p.log)
-	var bar *progressbar.ProgressBar
+	defer Timer(time.Now(), p.log, "MPSIU_CA")
 
 	// Initialize R if you are P_1
 	if p.id == 1 {
@@ -235,9 +221,6 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashM
 	}
 
 	// For all w in X, R[index(w)]= DH_Reduce(M[index(w)])
-	if p.showP {
-		bar = NewProgressBar(len(p.X), "cyan", "[1/2] Reducing")
-	}
 	unmodified := GetBitMap(M.Size())
 	var inputData ReduceInput
 	inputs := make([]WorkerInput, 0)
@@ -253,7 +236,7 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashM
 		inputs = append(inputs, WorkerInput{idx, inputData})
 		unmodified.Remove(idx)
 	}
-	pool := NewWorkerPool(uint64(len(inputs)), bar)
+	pool := NewWorkerPool(uint64(len(inputs)))
 	for _, v := range inputs {
 		pool.InChan <- v
 	}
@@ -264,15 +247,7 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashM
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
 	p.RunParallel(R, pool, ReduceWorker, dhCtx)
 
-	if p.showP {
-		if p.id == 1 {
-			bar = NewProgressBar(int(unmodified.GetCardinality()), "cyan", "[1/2] Randomizing")
-		} else {
-			bar = NewProgressBar(int(unmodified.GetCardinality()), "cyan", "[1/2] Reducing")
-		}
-	}
-
-	pool = NewWorkerPool(unmodified.GetCardinality(), bar)
+	pool = NewWorkerPool(unmodified.GetCardinality())
 	k := unmodified.Iterator()
 	var workerFn WorkerFunc
 	if p.id == 1 {

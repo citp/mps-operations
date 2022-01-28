@@ -3,22 +3,19 @@ package main
 import (
 	"runtime"
 	"sync"
-
-	"github.com/schollz/progressbar/v3"
 )
 
 // #############################################################################
 
-func NewWorkerPool(nJobs uint64, bar *progressbar.ProgressBar) *WorkerPool {
+func NewWorkerPool(nJobs uint64) *WorkerPool {
 	return &WorkerPool{
-		bar,
 		nJobs,
 		make(InputChannel, nJobs),
 		make(OutputChannel, nJobs),
 	}
 }
 
-func StartWorker(fn WorkerFunc, ctx WorkerCtx, InChan InputChannel, OutChan OutputChannel, bar *progressbar.ProgressBar) {
+func StartWorker(fn WorkerFunc, ctx WorkerCtx, InChan InputChannel, OutChan OutputChannel) {
 	for {
 		job := <-InChan
 		if job.id == 0 && job.data == nil {
@@ -45,7 +42,7 @@ func (p *WorkerPool) RunBatched(fn WorkerFunc, ctx WorkerCtx, input []WorkerInpu
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			StartWorker(fn, ctx, p.InChan, p.OutChan, p.bar)
+			StartWorker(fn, ctx, p.InChan, p.OutChan)
 		}()
 	}
 
@@ -72,7 +69,7 @@ func (p *WorkerPool) RunN(fn WorkerFunc, ctx WorkerCtx, nJobs uint64) []WorkerOu
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			StartWorker(fn, ctx, p.InChan, p.OutChan, p.bar)
+			StartWorker(fn, ctx, p.InChan, p.OutChan)
 		}()
 	}
 
@@ -94,7 +91,7 @@ func (p *WorkerPool) Run(fn WorkerFunc, ctx WorkerCtx) []WorkerOutput {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			StartWorker(fn, ctx, p.InChan, p.OutChan, p.bar)
+			StartWorker(fn, ctx, p.InChan, p.OutChan)
 		}()
 	}
 
