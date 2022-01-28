@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"fmt"
 	"math/big"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -266,6 +267,8 @@ func BenchmarkMPSIU_AD(b *testing.B) {
 }
 
 func BenchmarkMPSI_S(b *testing.B) {
+	fmt.Println("GOMAXPROCS (old):", runtime.GOMAXPROCS(10))
+
 	nParties := 3
 	Ni := 100000
 	N0 := Ni / 10

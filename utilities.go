@@ -426,8 +426,8 @@ func (s *Set) Serialize() map[string]int {
 
 func (s *Set) ADSum() int {
 	sum := 0
-	for w, v := range s.data {
-		fmt.Println(w, "=>", v)
+	for _, v := range s.data {
+		// fmt.Println(w, "=>", v)
 		sum += v
 	}
 	return sum
@@ -534,7 +534,7 @@ func E_FN(m, x0, xi, i float64, nParties int, mpsi bool) float64 {
 	if !mpsi {
 		xi *= float64(nParties)
 		xi -= i
-		fmt.Println(xi)
+		// fmt.Println(xi)
 	}
 	fnRate += (1 - E_FullSlots(m, xi)/float64(xi))
 	return float64(i) * (1 - fnRate)
