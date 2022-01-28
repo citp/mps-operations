@@ -20,9 +20,10 @@ type Party struct {
 }
 
 type Delegate struct {
-	party Party
-	alpha DHScalar
-	L     DHElement
+	party  Party
+	alpha  DHScalar
+	L      DHElement
+	aesKey []byte
 }
 
 // #############################################################################
@@ -49,10 +50,16 @@ type EGCiphertext struct {
 	c1, c2 []DHElement
 }
 
+type Ciphertext struct {
+	EG  EGCiphertext
+	AES []byte
+}
+
 type HashMapValues struct {
 	DHData []HashMapValue
-	EGData []EGCiphertext
-	nBits  int
+	// EGData []EGCiphertext
+	EncData []Ciphertext
+	nBits   int
 }
 
 type HashMapValue struct {
@@ -101,12 +108,17 @@ type H2CInput string
 
 type RandomizeInput struct{}
 
+type HashAndReduceInput struct {
+	w string
+	P DHElement
+}
+
 type ReduceInput struct {
 	H, P DHElement
 }
 
 type EncryptInput struct {
-	ct *EGCiphertext
+	ct *Ciphertext
 	S  *DHElement
 }
 
@@ -144,7 +156,7 @@ type H2COutput DHElement
 
 type DHOutput struct {
 	Q, S DHElement
-	Ct   EGCiphertext
+	Ct   Ciphertext
 }
 
 type EncryptOutput []byte

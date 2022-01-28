@@ -94,6 +94,12 @@ func (p *Party) Partial_Decrypt(ct *EGCiphertext) []DHElement {
 }
 
 func (p *Party) Initialize_R(M *HashMapValues, R *HashMapValues) {
+	if p.id != 1 {
+		return
+	}
+
+	defer Timer(time.Now(), p.log, "Initialize_R")
+
 	*R = NewHashMap(M.nBits)
 	inputs := make([]WorkerInput, 0)
 
@@ -123,12 +129,16 @@ func (p *Party) Initialize_R(M *HashMapValues, R *HashMapValues) {
 	}
 }
 
-func (p *Party) BlindEncrypt(M, R *HashMapValues) HashMapFinal {
+func (p *Party) BlindEncrypt(M, R *HashMapValues, sum bool) *HashMapFinal {
+	if p.id != p.n {
+		return nil
+	}
+
 	defer Timer(time.Now(), p.log, "BlindEncrypt")
 
 	var final HashMapFinal
 	length := len(R.DHData)
-	Assert(length == len(R.EGData))
+	Assert(length == len(R.EncData))
 
 	final.Q = make([]DHElement, length)
 	final.AES = make([][]byte, length)
@@ -137,9 +147,14 @@ func (p *Party) BlindEncrypt(M, R *HashMapValues) HashMapFinal {
 	for i := 0; i < length; i++ {
 		final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
 		final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
-		pool.InChan <- WorkerInput{uint64(i), EncryptInput{&M.EGData[i], &R.DHData[i].S}}
+		pool.InChan <- WorkerInput{uint64(i), EncryptInput{&M.EncData[i], &R.DHData[i].S}}
 	}
-	res := pool.Run(EncryptWorker, EncryptCtx{&p.ctx, &p.agg_pk})
+	var res []WorkerOutput
+	if sum {
+		res = pool.Run(EncryptEGWorker, EncryptCtx{&p.ctx, &p.agg_pk})
+	} else {
+		res = pool.Run(EncryptAESWorker, nil)
+	}
 	Assert(len(res) == length)
 
 	for i := 0; i < len(res); i++ {
@@ -148,7 +163,7 @@ func (p *Party) BlindEncrypt(M, R *HashMapValues) HashMapFinal {
 		final.AES[res[i].id] = data
 	}
 	p.Shuffle(&final)
-	return final
+	return &final
 }
 
 func (p *Party) Shuffle(R *HashMapFinal) {
@@ -162,13 +177,16 @@ func (p *Party) Shuffle(R *HashMapFinal) {
 
 // #############################################################################
 
-func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
-	defer Timer(time.Now(), p.log, "MPSI_S")
+// Multiparty Private Set Intersection (optionally, sum)
+func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) *HashMapFinal {
+	proto := "MPSI_S"
+	if !sum {
+		proto = "MPSI"
+	}
+	defer Timer(time.Now(), p.log, proto)
 
 	// Initialize R if you are P_1
-	if p.id == 1 {
-		p.Initialize_R(M, R)
-	}
+	p.Initialize_R(M, R)
 
 	// For all w in X, DH Reduce R[index(w)]
 	unmodified := GetBitMap(M.Size())
@@ -205,35 +223,28 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 	p.log.Printf("randomized slots=%d\n", unmodified.GetCardinality())
 
 	// Shuffle and return B if you are P_{n-1}
-	if p.id == p.n {
-		B := p.BlindEncrypt(M, R)
-		return &B
-	}
-	return nil
+	return p.BlindEncrypt(M, R, sum)
 }
 
-func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
-	defer Timer(time.Now(), p.log, "MPSIU_CA")
+func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) *HashMapFinal {
+	proto := "MPSIU_S"
+	if !sum {
+		proto = "MPSIU"
+	}
+	defer Timer(time.Now(), p.log, proto)
 
 	// Initialize R if you are P_1
-	if p.id == 1 {
-		*R = NewHashMap(M.nBits)
-	}
+	p.Initialize_R(M, R)
 
 	// For all w in X, R[index(w)]= DH_Reduce(M[index(w)])
 	unmodified := GetBitMap(M.Size())
-	var inputData ReduceInput
 	inputs := make([]WorkerInput, 0)
-
-	// for i := 0; i < len(p.X); i++ {
 	for w := range p.X {
 		idx := GetIndex(w, M.nBits)
 		if !unmodified.Contains(idx) {
 			continue
 		}
-		HashToCurve_13(w, &inputData.H, p.ctx.ecc.Curve)
-		inputData.P = M.DHData[idx].S
-		inputs = append(inputs, WorkerInput{idx, inputData})
+		inputs = append(inputs, WorkerInput{idx, HashAndReduceInput{w, M.DHData[idx].S}})
 		unmodified.Remove(idx)
 	}
 	pool := NewWorkerPool(uint64(len(inputs)))
@@ -245,7 +256,7 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashM
 	dhCtx := DHCtx{&p.ctx.ecc, L}
 	modified := M.Size() - unmodified.GetCardinality()
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
-	p.RunParallel(R, pool, ReduceWorker, dhCtx)
+	p.RunParallel(R, pool, HashAndReduceWorker, dhCtx)
 
 	pool = NewWorkerPool(unmodified.GetCardinality())
 	k := unmodified.Iterator()
@@ -272,11 +283,6 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashM
 	}
 	p.log.Printf("%s unmodified slots=%d\n", op, unmodified.GetCardinality())
 
-	// Shuffle if you are P_{n-1}
-	if p.id == p.n {
-		ret := p.BlindEncrypt(M, R)
-		return &ret
-	} else {
-		return nil
-	}
+	// Shuffle and return B if you are P_{n-1}
+	return p.BlindEncrypt(M, R, sum)
 }

@@ -7,7 +7,6 @@ import (
 	"log"
 	"math/big"
 	"os"
-	"runtime"
 	"testing"
 	"time"
 
@@ -221,7 +220,7 @@ func benchmarkInit(b *testing.B, nParties, N0, Ni, intCard, lim, nBits, nModuli,
 	parties := make([]Party, nParties)
 	fpaths := []string{"data/0.txt", "data/1.txt", "data/2.txt", "data/3.txt"}
 
-	mpsi := (proto == "MPSI_S")
+	mpsi := (proto == "MPSI")
 	data := NewSampleData(nParties+1, N0, Ni, intCard, lim, "data", false, mpsi)
 	res := data.ComputeStats(mpsi)
 
@@ -242,38 +241,12 @@ func benchmarkInit(b *testing.B, nParties, N0, Ni, intCard, lim, nBits, nModuli,
 	return delegate, parties, res
 }
 
-func BenchmarkMPSIU_AD(b *testing.B) {
-	nParties := 3
-	Ni := 10000
-	N0 := Ni / 10
-	intCard := N0 / 10
-	nBits := 21
-	nModuli := 3
-	maxBits := 33
-	lim := 1000
-
-	delegate, parties, res := benchmarkInit(b, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits, "MPSIU_S", false)
-	card := res[1]
-
-	b.ResetTimer()
-
-	// Round1
-	var M, R HashMapValues
-	var final *HashMapFinal
-	delegate.DelegateStart(&M)
-	for i := 0; i < nParties; i++ {
-		final = parties[i].MPSIU_CA(delegate.L, &M, &R)
+func benchmarkU(b *testing.B, sum bool) {
+	if sum {
+		fmt.Println("Running MPSIU-S")
+	} else {
+		fmt.Println("Running MPSIU")
 	}
-	fmt.Println("Finished: Round 1.")
-
-	cardComputed, _ := delegate.DelegateFinish(final)
-	fmt.Println("Finished: Round 2.")
-
-	fmt.Printf("Cardinality: %f (true) %d (computed) %f (error)\n", card, cardComputed, ((float64(cardComputed) - card) * 100 / card))
-}
-
-func BenchmarkMPSI_S(b *testing.B) {
-	fmt.Println("GOMAXPROCS:", runtime.GOMAXPROCS(0))
 
 	nParties := 3
 	Ni := 100000
@@ -284,7 +257,7 @@ func BenchmarkMPSI_S(b *testing.B) {
 	maxBits := 33
 	lim := 1000
 
-	delegate, parties, res := benchmarkInit(b, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits, "MPSI_S", false)
+	delegate, parties, res := benchmarkInit(b, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits, "MPSIU", false)
 	card := res[0]
 
 	b.ResetTimer()
@@ -292,27 +265,130 @@ func BenchmarkMPSI_S(b *testing.B) {
 	// Round 1
 	var M, R HashMapValues
 	var final *HashMapFinal
-	delegate.DelegateStart(&M)
+	delegate.DelegateStart(&M, sum)
 	for i := 0; i < nParties; i++ {
-		final = parties[i].MPSI_S(delegate.L, &M, &R)
+		final = parties[i].MPSIU(delegate.L, &M, &R, sum)
 	}
 	fmt.Println("Finished: Round 1.")
 
 	// Round 2
-	cardComputed, ctSum := delegate.DelegateFinish(final)
+	cardComputed, ctSum := delegate.DelegateFinish(final, sum)
 	partials := make([][]DHElement, nParties+1)
-	partials[0] = delegate.party.Partial_Decrypt(&ctSum)
-	for i := 1; i <= nParties; i++ {
-		partials[i] = parties[i-1].Partial_Decrypt(&ctSum)
+	if sum {
+		partials[0] = delegate.party.Partial_Decrypt(ctSum)
+		for i := 1; i <= nParties; i++ {
+			partials[i] = parties[i-1].Partial_Decrypt(ctSum)
+		}
+		fmt.Println("Finished: Round 2.")
 	}
-	fmt.Println("Finished: Round 2.")
-
-	// Round 3
-	sum := delegate.JointDecryption(&ctSum, partials)
-	fmt.Println("Finished: JointDecryption")
 
 	fmt.Printf("Cardinality: %f (true) %d (computed) %f (error)\n", card, cardComputed, ((float64(cardComputed) - card) * 100 / card))
-	fmt.Println("Sum:", sum.Text(10))
+
+	if sum {
+		// Round 3
+		computedSum := delegate.JointDecryption(ctSum, partials)
+		fmt.Println("Finished: JointDecryption")
+		fmt.Println("Sum:", computedSum.Text(10))
+	}
+
+	delegate.party.log.Println("---------------------------------")
+}
+
+// func BenchmarkMPSIU_AD(b *testing.B) {
+// 	nParties := 3
+// 	Ni := 10000
+// 	N0 := Ni / 10
+// 	intCard := N0 / 10
+// 	nBits := 21
+// 	nModuli := 3
+// 	maxBits := 33
+// 	lim := 1000
+
+// 	delegate, parties, res := benchmarkInit(b, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits, "MPSIU_S", false)
+// 	card := res[1]
+
+// 	b.ResetTimer()
+
+// 	// Round1
+// 	var M, R HashMapValues
+// 	var final *HashMapFinal
+// 	delegate.DelegateStart(&M)
+// 	for i := 0; i < nParties; i++ {
+// 		final = parties[i].MPSIU_CA(delegate.L, &M, &R)
+// 	}
+// 	fmt.Println("Finished: Round 1.")
+
+// 	cardComputed, _ := delegate.DelegateFinish(final)
+// 	fmt.Println("Finished: Round 2.")
+
+// 	fmt.Printf("Cardinality: %f (true) %d (computed) %f (error)\n", card, cardComputed, ((float64(cardComputed) - card) * 100 / card))
+// }
+
+func BenchmarkMPSIUS(b *testing.B) {
+	benchmarkU(b, true)
+}
+
+func BenchmarkMPSIU_(b *testing.B) {
+	benchmarkU(b, false)
+}
+
+func BenchmarkMPSIS(b *testing.B) {
+	benchmarkI(b, true)
+}
+
+func BenchmarkMPSI_(b *testing.B) {
+	benchmarkI(b, false)
+}
+
+func benchmarkI(b *testing.B, sum bool) {
+	if sum {
+		fmt.Println("Running MPSI-S")
+	} else {
+		fmt.Println("Running MPSI")
+	}
+
+	nParties := 3
+	Ni := 100000
+	N0 := Ni / 10
+	intCard := N0 / 10
+	nBits := 20
+	nModuli := 3
+	maxBits := 33
+	lim := 1000
+
+	delegate, parties, res := benchmarkInit(b, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits, "MPSI", false)
+	card := res[0]
+
+	b.ResetTimer()
+
+	// Round 1
+	var M, R HashMapValues
+	var final *HashMapFinal
+	delegate.DelegateStart(&M, sum)
+	for i := 0; i < nParties; i++ {
+		final = parties[i].MPSI(delegate.L, &M, &R, sum)
+	}
+	fmt.Println("Finished: Round 1.")
+
+	// Round 2
+	cardComputed, ctSum := delegate.DelegateFinish(final, sum)
+	partials := make([][]DHElement, nParties+1)
+	if sum {
+		partials[0] = delegate.party.Partial_Decrypt(ctSum)
+		for i := 1; i <= nParties; i++ {
+			partials[i] = parties[i-1].Partial_Decrypt(ctSum)
+		}
+		fmt.Println("Finished: Round 2.")
+	}
+
+	fmt.Printf("Cardinality: %f (true) %d (computed) %f (error)\n", card, cardComputed, ((float64(cardComputed) - card) * 100 / card))
+
+	if sum {
+		// Round 3
+		computedSum := delegate.JointDecryption(ctSum, partials)
+		fmt.Println("Finished: JointDecryption")
+		fmt.Println("Sum:", computedSum.Text(10))
+	}
 
 	delegate.party.log.Println("---------------------------------")
 }
