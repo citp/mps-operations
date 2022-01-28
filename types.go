@@ -95,15 +95,17 @@ type Stopwatch struct {
 
 // #############################################################################
 
+type BlindInput struct {
+	w string
+	v int
+}
+
+type H2CInput string
+
 type RandomizeInput struct{}
 
 type ReduceInput struct {
 	H, P DHElement
-}
-
-type BlindInput struct {
-	w string
-	v int
 }
 
 type EncryptInput struct {
@@ -116,11 +118,6 @@ type UnblindInput struct {
 	AES []byte
 }
 
-type DHCtx struct {
-	ctx *DHContext
-	L   DHElement
-}
-
 type BlindCtx struct {
 	ctx   *EGContext
 	alpha DHScalar
@@ -128,18 +125,27 @@ type BlindCtx struct {
 	sk    DHScalar
 }
 
+type H2CCtx elliptic.Curve
+
+type DHCtx struct {
+	ctx *DHContext
+	L   DHElement
+}
+
 type EncryptCtx struct {
 	ctx *EGContext
 	apk *DHElement
 }
+
+type H2COutput DHElement
 
 type DHOutput struct {
 	Q, S DHElement
 	Ct   EGCiphertext
 }
 
-type UnblindOutput int
-
 type EncryptOutput []byte
+
+type UnblindOutput int
 
 // #############################################################################

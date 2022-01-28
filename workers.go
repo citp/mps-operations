@@ -89,4 +89,15 @@ func EncryptWorker(a WorkerCtx, b interface{}) interface{} {
 	return EncryptOutput(AEAD_Encrypt(ctx.ctx.EG_Serialize(arg.ct), SHA256(arg.S.Serialize())))
 }
 
+func H2CWorker(a WorkerCtx, b interface{}) interface{} {
+	var Q DHElement
+	curve, ok := a.(H2CCtx)
+	Assert(ok)
+	arg, ok := b.(H2CInput)
+	Assert(ok)
+
+	HashToCurve_13(string(arg), &Q, curve)
+	return H2COutput(Q)
+}
+
 // #############################################################################

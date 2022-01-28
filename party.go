@@ -132,6 +132,37 @@ func (p *Party) Partial_Decrypt(ct *EGCiphertext) []DHElement {
 	return p.ctx.EGMP_Decrypt(p.partial_sk, ct)
 }
 
+func (p *Party) Initialize_R(M *HashMapValues, R *HashMapValues) {
+	*R = NewHashMap(M.nBits)
+	inputs := make([]WorkerInput, 0)
+
+	unmodified := GetBitMap(M.Size())
+	for w := range p.X {
+		idx := GetIndex(w, R.nBits)
+		if !unmodified.Contains(idx) {
+			continue
+		}
+		inputs = append(inputs, WorkerInput{idx, H2CInput(w)})
+		R.DHData[idx].S = M.DHData[idx].S
+		unmodified.Remove(idx)
+	}
+
+	pool := NewWorkerPool(uint64(len(inputs)), nil)
+	for _, v := range inputs {
+		pool.InChan <- v
+	}
+
+	res := pool.Run(H2CWorker, H2CCtx(p.ctx.ecc.Curve))
+	Assert(len(res) == len(inputs))
+
+	for i := 0; i < len(res); i++ {
+		data, ok := res[i].data.(H2COutput)
+		Assert(ok)
+		R.DHData[res[i].id].Q = DHElement(data)
+	}
+	fmt.Println("Finished H2C", p.id, len(inputs))
+}
+
 // #############################################################################
 
 func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMapFinal {
@@ -140,14 +171,14 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 
 	// Initialize R if you are P_1
 	if p.id == 1 {
-		*R = NewHashMap(M.nBits)
+		p.Initialize_R(M, R)
 	}
 
 	if p.showP {
 		bar = NewProgressBar(len(p.X), "cyan", "[1/2] Reducing")
 	}
 
-	// For all w in X, DH Reduce M[index(w)] (if P_1), R[index(w)] otherwise
+	// For all w in X, DH Reduce M[index(w)] (if P_1), DH Reduce R[index(w)] otherwise
 	unmodified := GetBitMap(M.Size())
 	inputs := make([]WorkerInput, 0)
 
@@ -157,10 +188,6 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 			continue
 		}
 		val := R.DHData[idx]
-		if p.id == 1 {
-			HashToCurve_13(w, &val.Q, p.ctx.ecc.Curve)
-			val.S = M.DHData[idx].S
-		}
 		inputs = append(inputs, WorkerInput{idx, ReduceInput{val.Q, val.S}})
 		unmodified.Remove(idx)
 	}
@@ -191,7 +218,6 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 
 	// Shuffle if you are P_{n-1}
 	if p.id == p.n {
-		// ret := p.Encrypt(M, R)
 		ret := p.BlindEncrypt(M, R)
 		return &ret
 	} else {
