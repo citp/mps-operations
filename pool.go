@@ -19,12 +19,19 @@ func NewWorkerPool(nJobs uint64, bar *progressbar.ProgressBar) *WorkerPool {
 }
 
 func StartWorker(fn WorkerFunc, ctx WorkerCtx, InChan InputChannel, OutChan OutputChannel, bar *progressbar.ProgressBar) {
-	for job := range InChan {
-		OutChan <- WorkerOutput{job.id, fn(ctx, job.data)}
-		if bar != nil {
-			bar.Add(1)
+	for {
+		job := <-InChan
+		if job.id == 0 && job.data == nil {
+			break
 		}
+		OutChan <- WorkerOutput{job.id, fn(ctx, job.data)}
 	}
+	// for job := range InChan {
+	// OutChan <- WorkerOutput{job.id, fn(ctx, job.data)}
+	// if bar != nil {
+	// 	bar.Add(1)
+	// }
+	// }
 }
 
 func (p *WorkerPool) RunBatched(fn WorkerFunc, ctx WorkerCtx, input []WorkerInput, nBatches uint64) []WorkerOutput {

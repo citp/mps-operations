@@ -22,7 +22,7 @@ func (p *Party) RunParallel(R *HashMapValues, pool *WorkerPool, fn WorkerFunc, c
 	}
 }
 
-func (p *Party) Encrypt(M, R *HashMapValues) HashMapFinal {
+func (p *Party) BlindEncrypt(M, R *HashMapValues) HashMapFinal {
 	var final HashMapFinal
 	length := len(R.DHData)
 	Assert(length == len(R.EGData))
@@ -30,11 +30,19 @@ func (p *Party) Encrypt(M, R *HashMapValues) HashMapFinal {
 	final.Q = make([]DHElement, length)
 	final.AES = make([][]byte, length)
 
+	pool := NewWorkerPool(uint64(length), nil)
 	for i := 0; i < length; i++ {
 		final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
 		final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
-		p.ctx.EG_Rerandomize(&p.agg_pk, &M.EGData[i])
-		final.AES[i] = AEAD_Encrypt(p.ctx.EG_Serialize(&M.EGData[i]), SHA256(R.DHData[i].S.Serialize()))
+		pool.InChan <- WorkerInput{uint64(i), EncryptInput{&M.EGData[i], &R.DHData[i].S}}
+	}
+	res := pool.Run(EncryptWorker, EncryptCtx{&p.ctx, &p.agg_pk})
+	Assert(len(res) == length)
+
+	for i := 0; i < len(res); i++ {
+		data, ok := res[i].data.(EncryptOutput)
+		Assert(ok)
+		final.AES[res[i].id] = data
 	}
 	p.Shuffle(&final)
 	return final
@@ -143,7 +151,6 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 	unmodified := GetBitMap(M.Size())
 	inputs := make([]WorkerInput, 0)
 
-	// for i := 0; i < len(p.X); i++ {
 	for w := range p.X {
 		idx := GetIndex(w, R.nBits)
 		if !unmodified.Contains(idx) {
@@ -184,7 +191,8 @@ func (p *Party) MPSI_S(L DHElement, M *HashMapValues, R *HashMapValues) *HashMap
 
 	// Shuffle if you are P_{n-1}
 	if p.id == p.n {
-		ret := p.Encrypt(M, R)
+		// ret := p.Encrypt(M, R)
+		ret := p.BlindEncrypt(M, R)
 		return &ret
 	} else {
 		return nil
@@ -265,7 +273,7 @@ func (p *Party) MPSIU_CA(L DHElement, M *HashMapValues, R *HashMapValues) *HashM
 
 	// Shuffle if you are P_{n-1}
 	if p.id == p.n {
-		ret := p.Encrypt(M, R)
+		ret := p.BlindEncrypt(M, R)
 		return &ret
 	} else {
 		return nil

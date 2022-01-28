@@ -106,10 +106,10 @@ type BlindInput struct {
 	v int
 }
 
-// type BlindOutput struct {
-// 	S  DHElement
-// 	Ct EGCiphertext
-// }
+type EncryptInput struct {
+	ct *EGCiphertext
+	S  *DHElement
+}
 
 type UnblindInput struct {
 	Q   DHElement
@@ -128,11 +128,18 @@ type BlindCtx struct {
 	sk    DHScalar
 }
 
+type EncryptCtx struct {
+	ctx *EGContext
+	apk *DHElement
+}
+
 type DHOutput struct {
 	Q, S DHElement
 	Ct   EGCiphertext
 }
 
 type UnblindOutput int
+
+type EncryptOutput []byte
 
 // #############################################################################

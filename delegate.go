@@ -28,7 +28,7 @@ func (d *Delegate) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *
 	d.party.ctx.ecc.EC_BaseMultiply(d.alpha, &d.L)
 }
 
-func (d *Delegate) Round1(M *HashMapValues) {
+func (d *Delegate) DelegateStart(M *HashMapValues) {
 	defer Timer(time.Now(), d.party.log)
 	var bar *progressbar.ProgressBar
 
@@ -39,7 +39,7 @@ func (d *Delegate) Round1(M *HashMapValues) {
 	*M = NewHashMap(d.party.nBits)
 	pool := NewWorkerPool(uint64(len(d.party.X)), bar)
 	unmodified := GetBitMap(M.Size())
-	// fmt.Println(len(d.party.X))
+	ctx := BlindCtx{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk}
 	for w, v := range d.party.X {
 		idx := GetIndex(w, M.nBits)
 		pool.InChan <- WorkerInput{idx, BlindInput{w, v}}
@@ -48,8 +48,7 @@ func (d *Delegate) Round1(M *HashMapValues) {
 
 	// var pk DHElement
 	// d.party.ctx.EG_PubKey(d.party.partial_sk, &pk)
-	d.party.RunParallelDelegate(M, pool, BlindWorker, BlindCtx{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
-
+	d.party.RunParallelDelegate(M, pool, BlindWorker, ctx)
 	filled := uint64(M.Size()) - unmodified.GetCardinality()
 	d.party.log.Printf("filled slots=%d (expected=%f) / prop=%f\n", filled, E_FullSlots(float64(M.Size()), float64(len(d.party.X))), float64(filled)/float64(len(d.party.X)))
 
@@ -66,7 +65,7 @@ func (d *Delegate) Round1(M *HashMapValues) {
 	// DHCtx{&d.party.ctx.ecc, d.L}
 }
 
-func (d *Delegate) Round2(R *HashMapFinal) (int, EGCiphertext) {
+func (d *Delegate) DelegateFinish(R *HashMapFinal) (int, EGCiphertext) {
 	defer Timer(time.Now(), d.party.log)
 	var bar *progressbar.ProgressBar
 

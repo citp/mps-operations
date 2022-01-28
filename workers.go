@@ -81,4 +81,12 @@ func UnblindWorker(a WorkerCtx, b interface{}) interface{} {
 	return nil
 }
 
+func EncryptWorker(a WorkerCtx, b interface{}) interface{} {
+	ctx, _ := a.(EncryptCtx)
+	arg, _ := b.(EncryptInput)
+
+	ctx.ctx.EG_Rerandomize(ctx.apk, arg.ct)
+	return EncryptOutput(AEAD_Encrypt(ctx.ctx.EG_Serialize(arg.ct), SHA256(arg.S.Serialize())))
+}
+
 // #############################################################################

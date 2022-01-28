@@ -74,7 +74,7 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 	M = NewHashMap(delegate.party.nBits)
 
 	watch.Reset()
-	delegate.Round1(&M)
+	delegate.DelegateStart(&M)
 	times = append(times, watch.Elapsed())
 	for i := 0; i < nParties; i++ {
 		if proto == 1 {
@@ -90,7 +90,7 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 
 	// Round2
 	watch.Reset()
-	cardComputed, _ := delegate.Round2(final)
+	cardComputed, _ := delegate.DelegateFinish(final)
 	times = append(times, watch.Elapsed())
 
 	delegate.party.log.Printf("Computation: %d EC point mul.\n", delegate.party.TComputation(proto, &R))

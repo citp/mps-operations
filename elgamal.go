@@ -90,7 +90,7 @@ func (ctx *EGContext) BSGS(beta *DHElement) *big.Int {
 			return new(big.Int).Add(&j, big.NewInt(i*m))
 		}
 		ctx.ecc.EC_Add(gamma, GminusM, &gamma)
-		fmt.Println("Giant step")
+		// fmt.Println("Giant step")
 	}
 
 	return nil
