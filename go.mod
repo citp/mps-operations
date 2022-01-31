@@ -1,4 +1,4 @@
-module micfis
+module mps_operations
 
 go 1.13
 
