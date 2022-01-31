@@ -2,9 +2,11 @@ package main
 
 import (
 	"crypto/elliptic"
-	crand "crypto/rand"
+	// crand "crypto/rand"
 	"math/big"
 	"strings"
+
+	"lukechampine.com/frand"
 )
 
 // #############################################################################
@@ -54,50 +56,57 @@ func (ctx *DHContext) DH_Reduce(L, T, P DHElement) (DHElement, DHElement) {
 
 func (ctx *DHContext) SquareRootModP(y2 *big.Int) *big.Int {
 	p := ctx.Curve.Params().P
-	exp := new(big.Int).Add(p, big.NewInt(1))
-	exp.Div(exp, big.NewInt(4))
-	// yPrimeMinus := new(big.Int).Sub(p, yPrime)
-	// if yPrime.Cmp(yPrimeMinus) == -1 {
-	// 	return yPrime
-	// }
-	return new(big.Int).Exp(y2, exp, p)
+	var exp big.Int
+	exp.Add(p, &one)
+
+	// exp := new(big.Int).Add(p, big.NewInt(1))
+	// exp.Div(exp, big.NewInt(4))
+	exp.Div(&exp, &four)
+
+	return new(big.Int).Exp(y2, &exp, p)
 }
 
 func (ctx *DHContext) YfromX(x *big.Int) *big.Int {
 	p := ctx.Curve.Params().P
-	three := big.NewInt(3)
-	x3 := new(big.Int).Exp(x, three, p)
-	y2 := new(big.Int).Sub(x3, new(big.Int).Mul(three, x))
-	y2.Add(y2, ctx.Curve.Params().B)
-	y2.Mod(y2, p)
-	return ctx.SquareRootModP(y2)
+	var thriceX, x3, y2 big.Int
+	// three := big.NewInt(3)
+	// x3 := new(big.Int).Exp(x, &three, p)
+	// y2 := new(big.Int).Sub(&x3, new(big.Int).Mul(&three, x))
+	x3.Exp(x, &three, p)
+	thriceX.Mul(&three, x)
+	// y2.Sub(&x3, new(big.Int).Mul(&three, x))
+	y2.Sub(&x3, &thriceX)
+	y2.Add(&y2, ctx.Curve.Params().B)
+	y2.Mod(&y2, p)
+	return ctx.SquareRootModP(&y2)
 }
 
-func (ctx *DHContext) HashToCurve_BF(s string, e *DHElement) {
-	buf := []byte(s)
-	p := ctx.Curve.Params().P
-	count := 0
-	for {
-		// bufHash := Blake2b(buf)
-		bufHash := BLAKE2B(buf, "HashToCurve")
-		x := new(big.Int).SetBytes(bufHash)
-		x = x.Mod(x, p)
-		y := ctx.YfromX(x)
-		if ctx.Curve.IsOnCurve(x, y) {
-			e.x, e.y = x, y
-			// fmt.Println("count", count)
-			return
-			// return DHElement{x, y}
-		}
-		count += 1
-		buf = bufHash
-		// buf = Blake2b(bufHash)
-	}
-}
+// func (ctx *DHContext) HashToCurve_BF(s string, e *DHElement) {
+// 	buf := []byte(s)
+// 	p := ctx.Curve.Params().P
+// 	count := 0
+// 	for {
+// 		// bufHash := Blake2b(buf)
+// 		bufHash := BLAKE2B(buf, "HashToCurve")
+// 		x := new(big.Int).SetBytes(bufHash)
+// 		x = x.Mod(x, p)
+// 		y := ctx.YfromX(x)
+// 		if ctx.Curve.IsOnCurve(x, y) {
+// 			e.x, e.y = x, y
+// 			// fmt.Println("count", count)
+// 			return
+// 			// return DHElement{x, y}
+// 		}
+// 		count += 1
+// 		buf = bufHash
+// 		// buf = Blake2b(bufHash)
+// 	}
+// }
 
 func (ctx *DHContext) RandomScalar() *big.Int {
-	ret, err := crand.Int(crand.Reader, ctx.Curve.Params().P)
-	Panic(err)
+	ret := frand.BigIntn(ctx.Curve.Params().P)
+	// ret, err := crand.Int(crand.Reader, ctx.Curve.Params().P)
+	// Panic(err)
 	return ret
 }
 
@@ -122,25 +131,26 @@ func (p *DHElement) String() string {
 func (p *DHElement) Serialize() []byte {
 	ret := p.x.Bytes()
 	ret = append(make([]byte, 32-len(ret)), ret...) // Pad to 32 bytes
+	var sign big.Int
 
-	// sign := p.y.Sign() + 2
-	sign := new(big.Int).Mod(p.y, &two).Int64() + 2
-	return append(ret, byte(sign))
+	// sign := new(big.Int).Mod(p.y, &two).Int64() + 2
+	return append(ret, byte(sign.Mod(p.y, &two).Int64()+2))
 }
 
 func DHElementFromBytes(ctx *DHContext, b []byte) DHElement {
 	Assert(len(b) == 33)
-	x := new(big.Int).SetBytes(b[:32])
-	y := ctx.YfromX(x)
-	parity := new(big.Int).Mod(y, &two).Int64()
+	var x, temp big.Int
+
+	// x := new(big.Int).SetBytes(b[:32])
+	x.SetBytes(b[:32])
+	y := ctx.YfromX(&x)
+
+	parity := temp.Mod(y, &two).Int64()
 
 	if int64(b[32])-2 != parity {
-		// fmt.Println(b[32], y.Sign())
 		y.Sub(ctx.Curve.Params().P, y)
-		// y.Neg(y)
-		// y.Mod(y, ctx.Curve.Params().P)
 	}
-	return DHElement{x, y}
+	return DHElement{&x, y}
 }
 
 func (p *DHElement) ByteSize() int {

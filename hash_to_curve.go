@@ -123,7 +123,9 @@ func IsSquare(x, p *big.Int) bool {
 
 // big endian
 func OS2IP(octets []byte) *big.Int {
-	return new(big.Int).SetBytes(octets)
+	var ret big.Int
+	return ret.SetBytes(octets)
+	// return new(big.Int).SetBytes(octets)
 }
 
 func Sgn0(x, p *big.Int) int {
@@ -149,10 +151,11 @@ func SHA512(msg []byte) []byte {
 }
 
 func Sqrt(x, p *big.Int) *big.Int {
-	var p1, exp big.Int
+	var p1, exp, ret big.Int
 	p1.Add(p, &one)
 	exp.Div(&p1, &four)
-	return new(big.Int).Exp(x, &exp, p)
+	return ret.Exp(x, &exp, p)
+	// return new(big.Int).Exp(x, &exp, p)
 }
 
 func (params *HtoCParams) SqrtRatio3Mod4(u, v *big.Int) (bool, big.Int) {
@@ -308,22 +311,7 @@ func (params *HtoCParams) ClearCofactor(R DHElement) DHElement {
 }
 
 // from https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-13#section-3
-func HashToCurve_13(msg string, P *DHElement, curve elliptic.Curve) {
-	var params *HtoCParams
-	var err error
-
-	switch curve.Params().Name {
-	case "P-256":
-		params, err = NewHtoCParams("P256_XMD:SHA-256_SSWU_RO_")
-		Panic(err)
-	case "P-384":
-		params, err = NewHtoCParams("P384_XMD:SHA-384_SSWU_RO_")
-		Panic(err)
-	case "P-521":
-		params, err = NewHtoCParams("P521_XMD:SHA-512_SSWU_RO_")
-		Panic(err)
-	}
-
+func HashToCurve_13(msg string, P *DHElement, curve elliptic.Curve, params *HtoCParams) {
 	u := params.HashToField(msg, 2)
 
 	Q0 := params.MapToCurveSWUStraight(&u[0])

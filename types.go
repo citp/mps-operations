@@ -17,6 +17,7 @@ type Party struct {
 	showP        bool
 	partial_sk   *big.Int
 	agg_pk       DHElement
+	h2c          *HtoCParams
 }
 
 type Delegate struct {
@@ -136,6 +137,7 @@ type BlindCtxInt struct {
 	ctx   *DHContext
 	alpha DHScalar
 	sk    []byte
+	h2c   *HtoCParams
 }
 
 type BlindCtxSum struct {
@@ -143,6 +145,7 @@ type BlindCtxSum struct {
 	alpha DHScalar
 	pk    DHElement
 	sk    DHScalar
+	h2c   *HtoCParams
 }
 
 type H2CCtx elliptic.Curve
@@ -151,6 +154,7 @@ type DHCtx struct {
 	ctx  *DHContext
 	L    DHElement
 	isP1 bool
+	h2c  *HtoCParams
 }
 
 type EncryptCtx struct {

@@ -15,7 +15,7 @@ func BlindEGWorker(a WorkerCtx, b interface{}) interface{} {
 	arg, ok := b.(BlindInput)
 	Assert(ok)
 
-	HashToCurve_13(arg.w, &h, ctx.ctx.ecc.Curve)
+	HashToCurve_13(arg.w, &h, ctx.ctx.ecc.Curve, ctx.h2c)
 	ctx.ctx.ecc.EC_Multiply(ctx.alpha, h, &output.S)
 	m = *big.NewInt(int64(arg.v))
 	ctx.ctx.EG_Encrypt(&ctx.pk, &m, &output.Ct.EG)
@@ -33,7 +33,7 @@ func BlindAESWorker(a WorkerCtx, b interface{}) interface{} {
 	arg, ok := b.(BlindInput)
 	Assert(ok)
 
-	HashToCurve_13(arg.w, &h, ctx.ctx.Curve)
+	HashToCurve_13(arg.w, &h, ctx.ctx.Curve, ctx.h2c)
 	ctx.ctx.EC_Multiply(ctx.alpha, h, &output.S)
 	output.Ct.AES = AEAD_Encrypt([]byte(arg.w), ctx.sk)
 	return output
@@ -88,7 +88,7 @@ func HashAndReduceWorker(a WorkerCtx, b interface{}) interface{} {
 	Assert(ok)
 	var output DHOutput
 	var H DHElement
-	HashToCurve_13(string(arg.w), &H, ctx.ctx.Curve)
+	HashToCurve_13(string(arg.w), &H, ctx.ctx.Curve, ctx.h2c)
 	output.Q, output.S = ctx.ctx.DH_Reduce(ctx.L, H, arg.P)
 	return output
 }
@@ -100,7 +100,7 @@ func MPSIReduceWorker(a WorkerCtx, b interface{}) interface{} {
 	Assert(ok)
 	var output DHOutput
 	var H DHElement
-	HashToCurve_13(string(arg.w), &H, ctx.ctx.Curve)
+	HashToCurve_13(string(arg.w), &H, ctx.ctx.Curve, ctx.h2c)
 	output.Q, output.S = ctx.ctx.DH_Reduce(ctx.L, H, arg.Mj)
 	if !ctx.isP1 {
 		ctx.ctx.EC_Add(output.Q, arg.Rj0, &output.Q)
@@ -161,15 +161,15 @@ func EncryptAESWorker(a WorkerCtx, b interface{}) interface{} {
 	return EncryptOutput(AEAD_Encrypt(arg.ct.AES, AES_KDF(arg.S.Serialize())))
 }
 
-func H2CWorker(a WorkerCtx, b interface{}) interface{} {
-	var Q DHElement
-	curve, ok := a.(H2CCtx)
-	Assert(ok)
-	arg, ok := b.(H2CInput)
-	Assert(ok)
+// func H2CWorker(a WorkerCtx, b interface{}) interface{} {
+// 	var Q DHElement
+// 	curve, ok := a.(H2CCtx)
+// 	Assert(ok)
+// 	arg, ok := b.(H2CInput)
+// 	Assert(ok)
 
-	HashToCurve_13(string(arg), &Q, curve)
-	return H2COutput(Q)
-}
+// 	HashToCurve_13(string(arg), &Q, curve)
+// 	return H2COutput(Q)
+// }
 
 // #############################################################################

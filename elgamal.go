@@ -76,13 +76,15 @@ func (ctx *EGContext) genTable(bitSize uint) {
 
 func (ctx *EGContext) BSGS(beta *DHElement) *big.Int {
 	var GminusM, gamma DHElement
+	gamma.x = new(big.Int)
+	gamma.y = new(big.Int)
 	m := int64(len(ctx.table))
 
 	ctx.ecc.EC_BaseMultiply(big.NewInt(m), &GminusM)
 	ctx.ecc.EC_Negate(&GminusM)
 
-	gamma.x = new(big.Int).Set(beta.x)
-	gamma.y = new(big.Int).Set(beta.y)
+	gamma.x.Set(beta.x)
+	gamma.y.Set(beta.y)
 
 	for i := int64(0); i < m; i++ {
 		j, ok := ctx.lookup(string(gamma.Serialize()))

@@ -368,13 +368,15 @@ func benchmarkI(b *testing.B, sum bool) {
 
 func HToC_Tester(t *testing.T, suite string, testRes [][]string, curve elliptic.Curve) {
 	var P DHElement
+	params, err := NewHtoCParams(suite)
+	Panic(err)
 
 	fmt.Println("Testing:", suite)
 	msgs := []string{"", "abc", "abcdef0123456789", "q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", "a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 
 	for i, p := range testRes {
 		fmt.Println("msg:", msgs[i])
-		HashToCurve_13(msgs[i], &P, curve)
+		HashToCurve_13(msgs[i], &P, curve, params)
 		assert.EqualValues(t, p[0], P.x.Text(16))
 		assert.EqualValues(t, p[1], P.y.Text(16))
 	}
@@ -412,20 +414,22 @@ func TestHashToCurveIETF13(t *testing.T) {
 
 func BenchmarkHashToCurveIETF13(b *testing.B) {
 	var P DHElement
+	params, err := NewHtoCParams("P256_XMD:SHA-256_SSWU_RO_")
+	Panic(err)
 
 	for i := 0; i < b.N; i++ {
 		msg := RandomString(12)
-		HashToCurve_13(msg, &P, elliptic.P256())
+		HashToCurve_13(msg, &P, elliptic.P256(), params)
 	}
 }
 
-func BenchmarkHashToCurveBruteForce(b *testing.B) {
-	var ctx DHContext
-	var P DHElement
-	NewDHContext(&ctx)
+// func BenchmarkHashToCurveBruteForce(b *testing.B) {
+// 	var ctx DHContext
+// 	var P DHElement
+// 	NewDHContext(&ctx)
 
-	for i := 0; i < b.N; i++ {
-		msg := RandomString(12)
-		ctx.HashToCurve_BF(msg, &P)
-	}
-}
+// 	for i := 0; i < b.N; i++ {
+// 		msg := RandomString(12)
+// 		ctx.HashToCurve_BF(msg, &P)
+// 	}
+// }

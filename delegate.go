@@ -38,9 +38,9 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 	var ctxInt BlindCtxInt
 
 	if sum {
-		ctxSum = BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk}
+		ctxSum = BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk, d.party.h2c}
 	} else {
-		ctxInt = BlindCtxInt{&d.party.ctx.ecc, d.alpha, d.aesKey}
+		ctxInt = BlindCtxInt{&d.party.ctx.ecc, d.alpha, d.aesKey, d.party.h2c}
 	}
 
 	for w, v := range d.party.X {
@@ -84,7 +84,7 @@ func (d *Delegate) DelegateFinish(R *HashMapFinal, sum bool) (int, *EGCiphertext
 	var ctSum EGCiphertext
 	count := 0
 	if sum {
-		res = pool.Run(UnblindEGWorker, BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk})
+		res = pool.Run(UnblindEGWorker, BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk, d.party.h2c})
 
 		first := true
 		for i := 0; i < len(res); i++ {
@@ -100,7 +100,7 @@ func (d *Delegate) DelegateFinish(R *HashMapFinal, sum bool) (int, *EGCiphertext
 			}
 		}
 	} else {
-		res = pool.Run(UnblindAESWorker, BlindCtxInt{&d.party.ctx.ecc, d.alpha, d.aesKey})
+		res = pool.Run(UnblindAESWorker, BlindCtxInt{&d.party.ctx.ecc, d.alpha, d.aesKey, d.party.h2c})
 
 		for i := 0; i < len(res); i++ {
 			data, _ := res[i].data.(string)

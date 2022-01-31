@@ -72,6 +72,8 @@ func (p *Party) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *EGC
 	p.X = ReadFile(dPath)
 	p.showP = showP
 	p.partial_sk = ctx.ecc.RandomScalar()
+	p.h2c, err = NewHtoCParams("P256_XMD:SHA-256_SSWU_RO_")
+	Panic(err)
 }
 
 func (p *Party) Partial_PubKey() DHElement {
@@ -93,41 +95,41 @@ func (p *Party) Partial_Decrypt(ct *EGCiphertext) []DHElement {
 	return p.ctx.EGMP_Decrypt(p.partial_sk, ct)
 }
 
-func (p *Party) Initialize_R(M *HashMapValues, R *HashMapValues) {
-	if p.id != 1 {
-		return
-	}
+// func (p *Party) Initialize_R(M *HashMapValues, R *HashMapValues) {
+// 	if p.id != 1 {
+// 		return
+// 	}
 
-	defer Timer(time.Now(), p.log, "Initialize_R")
+// 	defer Timer(time.Now(), p.log, "Initialize_R")
 
-	*R = NewHashMap(M.nBits)
-	inputs := make([]WorkerInput, 0)
+// 	*R = NewHashMap(M.nBits)
+// 	inputs := make([]WorkerInput, 0)
 
-	unmodified := GetBitMap(M.Size())
-	for w := range p.X {
-		idx := GetIndex(w, R.nBits)
-		if !unmodified.Contains(idx) {
-			continue
-		}
-		inputs = append(inputs, WorkerInput{idx, H2CInput(w)})
-		R.DHData[idx].S = M.DHData[idx].S
-		unmodified.Remove(idx)
-	}
+// 	unmodified := GetBitMap(M.Size())
+// 	for w := range p.X {
+// 		idx := GetIndex(w, R.nBits)
+// 		if !unmodified.Contains(idx) {
+// 			continue
+// 		}
+// 		inputs = append(inputs, WorkerInput{idx, H2CInput(w)})
+// 		R.DHData[idx].S = M.DHData[idx].S
+// 		unmodified.Remove(idx)
+// 	}
 
-	pool := NewWorkerPool(uint64(len(inputs)))
-	for _, v := range inputs {
-		pool.InChan <- v
-	}
+// 	pool := NewWorkerPool(uint64(len(inputs)))
+// 	for _, v := range inputs {
+// 		pool.InChan <- v
+// 	}
 
-	res := pool.Run(H2CWorker, H2CCtx(p.ctx.ecc.Curve))
-	Assert(len(res) == len(inputs))
+// 	res := pool.Run(H2CWorker, H2CCtx(p.ctx.ecc.Curve))
+// 	Assert(len(res) == len(inputs))
 
-	for i := 0; i < len(res); i++ {
-		data, ok := res[i].data.(H2COutput)
-		Assert(ok)
-		R.DHData[res[i].id].Q = DHElement(data)
-	}
-}
+// 	for i := 0; i < len(res); i++ {
+// 		data, ok := res[i].data.(H2COutput)
+// 		Assert(ok)
+// 		R.DHData[res[i].id].Q = DHElement(data)
+// 	}
+// }
 
 func (p *Party) BlindEncrypt(M, R *HashMapValues, sum bool) *HashMapFinal {
 	if p.id != p.n {
@@ -214,7 +216,7 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 	modified := M.Size() - unmodified.GetCardinality()
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
 
-	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1}
+	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1, p.h2c}
 	// p.RunParallel(R, pool, ReduceWorker, dhCtx)
 	p.RunParallel(R, pool, MPSIReduceWorker, dhCtx)
 
@@ -239,7 +241,10 @@ func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool)
 	defer Timer(time.Now(), p.log, proto)
 
 	// Initialize R if you are P_1
-	p.Initialize_R(M, R)
+	if p.id == 1 {
+		*R = NewHashMap(M.nBits)
+	}
+	// p.Initialize_R(M, R)
 
 	// For all w in X, R[index(w)]= DH_Reduce(M[index(w)])
 	unmodified := GetBitMap(M.Size())
@@ -258,7 +263,7 @@ func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool)
 	}
 	fmt.Println("njobs", p.id, len(inputs))
 
-	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1}
+	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1, p.h2c}
 	modified := M.Size() - unmodified.GetCardinality()
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
 	p.RunParallel(R, pool, HashAndReduceWorker, dhCtx)
