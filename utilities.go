@@ -5,7 +5,6 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"math/big"
@@ -20,6 +19,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/blake2s"
+	"lukechampine.com/frand"
 )
 
 // #############################################################################
@@ -89,11 +89,12 @@ func HashPrefix(msg []byte, sz int) uint64 {
 // #############################################################################
 
 func RandomBytes(n int) []byte {
-	ret := make([]byte, n)
-	nR, err := io.ReadFull(crand.Reader, ret)
-	Assert(nR == n)
-	Panic(err)
-	return ret
+	return frand.Bytes(n)
+	// ret := make([]byte, n)
+	// nR, err := io.ReadFull(crand.Reader, ret)
+	// Assert(nR == n)
+	// Panic(err)
+	// return ret
 }
 
 func RandomPrime(n int) *big.Int {

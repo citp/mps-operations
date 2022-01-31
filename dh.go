@@ -14,6 +14,8 @@ import (
 func NewDHContext(ret *DHContext) {
 	ret.Curve = elliptic.P256()
 	ret.G = DHElement{ret.Curve.Params().Gx, ret.Curve.Params().Gy}
+	// ret.G.x.Set(ret.Curve.Params().Gx)
+	// ret.G.y.Set(ret.Curve.Params().Gy)
 }
 
 func (ctx *DHContext) EC_BaseMultiply(s DHScalar, ret *DHElement) {
