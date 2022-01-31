@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/elliptic"
+	"flag"
 	"fmt"
 	"log"
 	"math/big"
@@ -13,11 +14,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// #############################################################################
-
-func BenchmarkDataGeneration(b *testing.B) {
-
-}
+var nParties = flag.Int("n", 3, "no. of parties (excluding delegate)")
+var x0 = flag.Int("x0", 100000, "|X_0|")
+var xi = flag.Int("xi", 1000000, "|X_i|")
+var nBits = flag.Int("mbits", 23, "|M|=|R|=|B|=2^bits")
+var nModuli = flag.Int("mod", 3, "no. of CRT moduli")
+var maxBits = flag.Int("max", 33, "max size of result")
+var logFile = flag.String("log", "results/log.txt", "log file path")
 
 // #############################################################################
 
@@ -210,30 +213,30 @@ func BenchmarkAES(b *testing.B) {
 
 // #############################################################################
 
-func benchmarkInit(b *testing.B, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits int, proto string, showP bool) (Delegate, []Party, []float64) {
+func benchmarkInit(b *testing.B, intCard int, proto string, showP bool) (Delegate, []Party, []float64) {
 	logger := log.New(os.Stdout, "go test: ", log.Flags())
 	defer Timer(time.Now(), logger, "benchmarkInit")
 
 	var ctx EGContext
 	var delegate Delegate
-	pks := make([]DHElement, nParties+1)
-	parties := make([]Party, nParties)
+	pks := make([]DHElement, *nParties+1)
+	parties := make([]Party, *nParties)
 	fpaths := []string{"data/0.txt", "data/1.txt", "data/2.txt", "data/3.txt"}
 
 	mpsi := (proto == "MPSI")
-	data := NewSampleData(nParties+1, N0, Ni, intCard, lim, "data", false, mpsi)
+	data := NewSampleData(*nParties+1, *x0, *xi, intCard, 1000, "data", false, mpsi)
 	res := data.ComputeStats(mpsi)
 
-	NewEGContext(&ctx, uint(nModuli), uint(maxBits))
-	delegate.Init(0, nParties, nBits, fpaths[0], "results/log.txt", showP, &ctx)
+	NewEGContext(&ctx, uint(*nModuli), uint(*maxBits))
+	delegate.Init(0, *nParties, *nBits, fpaths[0], *logFile, showP, &ctx)
 	pks[0] = delegate.party.Partial_PubKey()
-	for i := 1; i <= nParties; i++ {
-		parties[i-1].Init(i, nParties, nBits, fpaths[i], "results/log.txt", showP, &ctx)
+	for i := 1; i <= *nParties; i++ {
+		parties[i-1].Init(i, *nParties, *nBits, fpaths[i], *logFile, showP, &ctx)
 		pks[i] = parties[i-1].Partial_PubKey()
 	}
 
 	delegate.party.Set_AggPubKey(pks)
-	for i := 1; i <= nParties; i++ {
+	for i := 1; i <= *nParties; i++ {
 		parties[i-1].Set_AggPubKey(pks)
 	}
 
@@ -248,16 +251,16 @@ func benchmarkU(b *testing.B, sum bool) {
 		fmt.Println("Running MPSIU")
 	}
 
-	nParties := 3
-	Ni := 100000
-	N0 := Ni / 10
-	intCard := N0 / 10
-	nBits := 20
-	nModuli := 3
-	maxBits := 33
-	lim := 1000
+	// nParties := 3
+	// Ni := 1000000
+	// N0 := Ni / 10
+	intCard := *x0 / 10
+	// nBits := 24
+	// nModuli := 3
+	// maxBits := 33
+	// lim := 1000
 
-	delegate, parties, res := benchmarkInit(b, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits, "MPSIU", false)
+	delegate, parties, res := benchmarkInit(b, intCard, "MPSIU", false)
 	card := res[0]
 
 	b.ResetTimer()
@@ -266,17 +269,17 @@ func benchmarkU(b *testing.B, sum bool) {
 	var M, R HashMapValues
 	var final *HashMapFinal
 	delegate.DelegateStart(&M, sum)
-	for i := 0; i < nParties; i++ {
+	for i := 0; i < *nParties; i++ {
 		final = parties[i].MPSIU(delegate.L, &M, &R, sum)
 	}
 	fmt.Println("Finished: Round 1.")
 
 	// Round 2
 	cardComputed, ctSum := delegate.DelegateFinish(final, sum)
-	partials := make([][]DHElement, nParties+1)
+	partials := make([][]DHElement, *nParties+1)
 	if sum {
 		partials[0] = delegate.party.Partial_Decrypt(ctSum)
-		for i := 1; i <= nParties; i++ {
+		for i := 1; i <= *nParties; i++ {
 			partials[i] = parties[i-1].Partial_Decrypt(ctSum)
 		}
 		fmt.Println("Finished: Round 2.")
@@ -293,36 +296,6 @@ func benchmarkU(b *testing.B, sum bool) {
 
 	delegate.party.log.Println("---------------------------------")
 }
-
-// func BenchmarkMPSIU_AD(b *testing.B) {
-// 	nParties := 3
-// 	Ni := 10000
-// 	N0 := Ni / 10
-// 	intCard := N0 / 10
-// 	nBits := 21
-// 	nModuli := 3
-// 	maxBits := 33
-// 	lim := 1000
-
-// 	delegate, parties, res := benchmarkInit(b, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits, "MPSIU_S", false)
-// 	card := res[1]
-
-// 	b.ResetTimer()
-
-// 	// Round1
-// 	var M, R HashMapValues
-// 	var final *HashMapFinal
-// 	delegate.DelegateStart(&M)
-// 	for i := 0; i < nParties; i++ {
-// 		final = parties[i].MPSIU_CA(delegate.L, &M, &R)
-// 	}
-// 	fmt.Println("Finished: Round 1.")
-
-// 	cardComputed, _ := delegate.DelegateFinish(final)
-// 	fmt.Println("Finished: Round 2.")
-
-// 	fmt.Printf("Cardinality: %f (true) %d (computed) %f (error)\n", card, cardComputed, ((float64(cardComputed) - card) * 100 / card))
-// }
 
 func BenchmarkMPSIUS(b *testing.B) {
 	benchmarkU(b, true)
@@ -347,16 +320,16 @@ func benchmarkI(b *testing.B, sum bool) {
 		fmt.Println("Running MPSI")
 	}
 
-	nParties := 3
-	Ni := 100000
-	N0 := Ni / 10
-	intCard := N0 / 10
-	nBits := 20
-	nModuli := 3
-	maxBits := 33
-	lim := 1000
+	// nParties := 3
+	// Ni := 100000
+	// N0 := Ni / 10
+	intCard := *x0 / 10
+	// nBits := 20
+	// nModuli := 3
+	// maxBits := 33
+	// lim := 1000
 
-	delegate, parties, res := benchmarkInit(b, nParties, N0, Ni, intCard, lim, nBits, nModuli, maxBits, "MPSI", false)
+	delegate, parties, res := benchmarkInit(b, intCard, "MPSI", false)
 	card := res[0]
 
 	b.ResetTimer()
@@ -365,17 +338,17 @@ func benchmarkI(b *testing.B, sum bool) {
 	var M, R HashMapValues
 	var final *HashMapFinal
 	delegate.DelegateStart(&M, sum)
-	for i := 0; i < nParties; i++ {
+	for i := 0; i < *nParties; i++ {
 		final = parties[i].MPSI(delegate.L, &M, &R, sum)
 	}
 	fmt.Println("Finished: Round 1.")
 
 	// Round 2
 	cardComputed, ctSum := delegate.DelegateFinish(final, sum)
-	partials := make([][]DHElement, nParties+1)
+	partials := make([][]DHElement, *nParties+1)
 	if sum {
 		partials[0] = delegate.party.Partial_Decrypt(ctSum)
-		for i := 1; i <= nParties; i++ {
+		for i := 1; i <= *nParties; i++ {
 			partials[i] = parties[i-1].Partial_Decrypt(ctSum)
 		}
 		fmt.Println("Finished: Round 2.")
