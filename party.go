@@ -186,7 +186,10 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 	defer Timer(time.Now(), p.log, proto)
 
 	// Initialize R if you are P_1
-	p.Initialize_R(M, R)
+	if p.id == 1 {
+		*R = NewHashMap(M.nBits)
+	}
+	// p.Initialize_R(M, R)
 
 	// For all w in X, DH Reduce R[index(w)]
 	unmodified := GetBitMap(M.Size())
@@ -197,7 +200,8 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 		if !unmodified.Contains(idx) {
 			continue
 		}
-		inputs = append(inputs, WorkerInput{idx, ReduceInput{R.DHData[idx].Q, R.DHData[idx].S}})
+		// inputs = append(inputs, WorkerInput{idx, ReduceInput{R.DHData[idx].Q, R.DHData[idx].S}})
+		inputs = append(inputs, WorkerInput{idx, MPSIReduceInput{w, R.DHData[idx].Q, R.DHData[idx].S, M.DHData[idx].S}})
 		unmodified.Remove(idx)
 	}
 
@@ -210,8 +214,9 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 	modified := M.Size() - unmodified.GetCardinality()
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
 
-	dhCtx := DHCtx{&p.ctx.ecc, L}
-	p.RunParallel(R, pool, ReduceWorker, dhCtx)
+	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1}
+	// p.RunParallel(R, pool, ReduceWorker, dhCtx)
+	p.RunParallel(R, pool, MPSIReduceWorker, dhCtx)
 
 	// Randomize all unmodified indices
 	pool = NewWorkerPool(uint64(unmodified.GetCardinality()))
@@ -253,7 +258,7 @@ func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool)
 	}
 	fmt.Println("njobs", p.id, len(inputs))
 
-	dhCtx := DHCtx{&p.ctx.ecc, L}
+	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1}
 	modified := M.Size() - unmodified.GetCardinality()
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
 	p.RunParallel(R, pool, HashAndReduceWorker, dhCtx)

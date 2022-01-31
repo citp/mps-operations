@@ -93,6 +93,22 @@ func HashAndReduceWorker(a WorkerCtx, b interface{}) interface{} {
 	return output
 }
 
+func MPSIReduceWorker(a WorkerCtx, b interface{}) interface{} {
+	ctx, ok := a.(DHCtx)
+	Assert(ok)
+	arg, ok := b.(MPSIReduceInput)
+	Assert(ok)
+	var output DHOutput
+	var H DHElement
+	HashToCurve_13(string(arg.w), &H, ctx.ctx.Curve)
+	output.Q, output.S = ctx.ctx.DH_Reduce(ctx.L, H, arg.Mj)
+	if !ctx.isP1 {
+		ctx.ctx.EC_Add(output.Q, arg.Rj0, &output.Q)
+		ctx.ctx.EC_Add(output.S, arg.Rj1, &output.S)
+	}
+	return output
+}
+
 func UnblindEGWorker(a WorkerCtx, b interface{}) interface{} {
 	ctx, ok := a.(BlindCtxSum)
 	Assert(ok)

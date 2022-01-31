@@ -113,6 +113,11 @@ type HashAndReduceInput struct {
 	P DHElement
 }
 
+type MPSIReduceInput struct {
+	w            string
+	Rj0, Rj1, Mj DHElement
+}
+
 type ReduceInput struct {
 	H, P DHElement
 }
@@ -143,8 +148,9 @@ type BlindCtxSum struct {
 type H2CCtx elliptic.Curve
 
 type DHCtx struct {
-	ctx *DHContext
-	L   DHElement
+	ctx  *DHContext
+	L    DHElement
+	isP1 bool
 }
 
 type EncryptCtx struct {
