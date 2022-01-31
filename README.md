@@ -1,8 +1,8 @@
 # Multiparty Private Set Cardinality Operations
 
 ## PROTOCOLS
-1. MPSI
-2. MPSIU-Sum
+1. MPSI (`MPSI_`)
+2. MPSIU-Sum (`MPSIUS`)
 
 ## USAGE
 ```
