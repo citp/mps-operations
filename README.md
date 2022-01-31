@@ -4,9 +4,12 @@
 1. MPSI
 2. MPSIU-Sum
 
-## TESTING
+## USAGE
+```
+go test -args -help
+```
 
-Check micfis_test.go for arguments.
+## TESTING
 
 ```
 go test -bench <protocol> -args <parameters>
