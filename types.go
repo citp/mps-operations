@@ -57,8 +57,7 @@ type Ciphertext struct {
 }
 
 type HashMapValues struct {
-	DHData []HashMapValue
-	// EGData []EGCiphertext
+	DHData  []HashMapValue
 	EncData []Ciphertext
 	nBits   int
 }

@@ -244,7 +244,7 @@ func (params *HtoCParams) ExpandMessageXMD(msg, DST string, len_in_bytes int) []
 }
 
 func (params *HtoCParams) MapToCurveSWUStraight(u *big.Int) DHElement {
-	var tv1, tv2, tv3, tv4, tv5, tv6, x, y big.Int
+	var tv1, tv2, tv3, tv4, tv5, tv6, x, y, negY big.Int
 	//  1.  tv1 = u^2
 	tv1.Exp(u, &two, params.q)
 	//  2.  tv1 = Z * tv1
@@ -293,7 +293,9 @@ func (params *HtoCParams) MapToCurveSWUStraight(u *big.Int) DHElement {
 	//  23.  e1 = sgn0(u) == sgn0(y)
 	e1 := (Sgn0(u, params.q) == Sgn0(&y, params.q))
 	//  24.   y = CMOV(-y, y, e1)
-	y = CMOV(*new(big.Int).Neg(&y), y, e1).(big.Int)
+	negY.Neg(&y)
+	y = CMOV(negY, y, e1).(big.Int)
+	// y = CMOV(*new(big.Int).Neg(&y), y, e1).(big.Int)
 	//  25.   x = x / tv4
 	x.Mul(&x, tv4.ModInverse(&tv4, params.q))
 	//  26. return (x, y)

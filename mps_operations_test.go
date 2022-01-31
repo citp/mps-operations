@@ -8,6 +8,8 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"testing"
 	"time"
 
@@ -214,6 +216,10 @@ func BenchmarkAES(b *testing.B) {
 // #############################################################################
 
 func benchmarkInit(b *testing.B, intCard int, proto string, showP bool) (Delegate, []Party, []float64) {
+	runtime.GOMAXPROCS(128)
+	debug.SetGCPercent(-1)
+	fmt.Println("GOMAXPROCS:", runtime.GOMAXPROCS(0))
+	fmt.Println("GCPercent:", debug.SetGCPercent(-1))
 	logger := log.New(os.Stdout, "go test: ", log.Flags())
 	defer Timer(time.Now(), logger, "benchmarkInit")
 

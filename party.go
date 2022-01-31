@@ -147,8 +147,9 @@ func (p *Party) BlindEncrypt(M, R *HashMapValues, sum bool) *HashMapFinal {
 
 	pool := NewWorkerPool(uint64(length))
 	for i := 0; i < length; i++ {
-		final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
-		final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
+		final.Q[i] = R.DHData[i].Q
+		// final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
+		// final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
 		pool.InChan <- WorkerInput{uint64(i), EncryptInput{&M.EncData[i], &R.DHData[i].S}}
 	}
 	var res []WorkerOutput
