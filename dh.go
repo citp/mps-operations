@@ -31,7 +31,16 @@ func (ctx *DHContext) EC_Negate(a *DHElement) {
 }
 
 func (ctx *DHContext) EC_Add(a, b DHElement, ret *DHElement) {
-	ret.x, ret.y = ctx.Curve.Add(a.x, a.y, b.x, b.y)
+	if ret.x == nil {
+		ret.x = new(big.Int)
+	}
+	if ret.y == nil {
+		ret.y = new(big.Int)
+	}
+	// ret.x = new(big.Int)
+	// ret.y = new(big.Int)
+	// ret.x, ret.y = ctx.Curve.Add(a.x, a.y, b.x, b.y)
+	Add(a.x, a.y, b.x, b.y, ret.x, ret.y, ctx.Curve.Params())
 }
 
 func (ctx *DHContext) DH_Reduce(L, T, P DHElement) (DHElement, DHElement) {
