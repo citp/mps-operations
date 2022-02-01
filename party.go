@@ -192,33 +192,26 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 	if p.id == 1 {
 		*R = NewHashMap(M.nBits)
 	}
-	// p.Initialize_R(M, R)
 
 	// For all w in X, DH Reduce R[index(w)]
 	unmodified := GetBitMap(M.Size())
-	inputs := make([]WorkerInput, 0)
+	pool := NewWorkerPool(uint64(len(p.X)))
 
 	for w := range p.X {
 		idx := GetIndex(w, R.nBits)
-		if !unmodified.Contains(idx) {
+		if !unmodified.CheckedRemove(idx) {
 			continue
 		}
-		// inputs = append(inputs, WorkerInput{idx, ReduceInput{R.DHData[idx].Q, R.DHData[idx].S}})
-		inputs = append(inputs, WorkerInput{idx, MPSIReduceInput{w, R.DHData[idx].Q, R.DHData[idx].S, M.DHData[idx].S}})
-		unmodified.Remove(idx)
+		pool.InChan <- WorkerInput{idx, MPSIReduceInput{w, R.DHData[idx].Q, R.DHData[idx].S, M.DHData[idx].S}}
 	}
 
-	pool := NewWorkerPool(uint64(len(inputs)))
-	for _, v := range inputs {
-		pool.InChan <- v
-	}
-	fmt.Println("njobs", p.id, len(inputs))
+	njobs := uint64(M.Size()) - unmodified.GetCardinality()
+	pool.nJobs = njobs
+	fmt.Println("njobs", p.id, njobs)
 
-	modified := M.Size() - unmodified.GetCardinality()
-	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
+	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", njobs, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(njobs)/float64(len(p.X)))
 
 	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1, p.h2c}
-	// p.RunParallel(R, pool, ReduceWorker, dhCtx)
 	p.RunParallel(R, pool, MPSIReduceWorker, dhCtx)
 
 	// Randomize all unmodified indices
@@ -245,24 +238,22 @@ func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool)
 	if p.id == 1 {
 		*R = NewHashMap(M.nBits)
 	}
-	// p.Initialize_R(M, R)
 
 	// For all w in X, R[index(w)]= DH_Reduce(M[index(w)])
 	unmodified := GetBitMap(M.Size())
-	inputs := make([]WorkerInput, 0)
+	pool := NewWorkerPool(uint64(len(p.X)))
+
 	for w := range p.X {
 		idx := GetIndex(w, M.nBits)
-		if !unmodified.Contains(idx) {
+		if !unmodified.CheckedRemove(idx) {
 			continue
 		}
-		inputs = append(inputs, WorkerInput{idx, HashAndReduceInput{w, M.DHData[idx].S}})
-		unmodified.Remove(idx)
+		pool.InChan <- WorkerInput{idx, HashAndReduceInput{w, M.DHData[idx].S}}
 	}
-	pool := NewWorkerPool(uint64(len(inputs)))
-	for _, v := range inputs {
-		pool.InChan <- v
-	}
-	fmt.Println("njobs", p.id, len(inputs))
+
+	njobs := uint64(M.Size()) - unmodified.GetCardinality()
+	pool.nJobs = njobs
+	fmt.Println("njobs", p.id, njobs)
 
 	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1, p.h2c}
 	modified := M.Size() - unmodified.GetCardinality()

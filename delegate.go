@@ -31,7 +31,6 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 	defer Timer(time.Now(), d.party.log, "DelegateStart")
 
 	*M = NewHashMap(d.party.nBits)
-	pool := NewWorkerPool(uint64(len(d.party.X)))
 	unmodified := GetBitMap(M.Size())
 
 	var ctxSum BlindCtxSum
@@ -43,11 +42,22 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 		ctxInt = BlindCtxInt{&d.party.ctx.ecc, d.alpha, d.aesKey, d.party.h2c}
 	}
 
+	pool := NewWorkerPool(uint64(len(d.party.X)))
+
 	for w, v := range d.party.X {
 		idx := GetIndex(w, M.nBits)
+		if !unmodified.CheckedRemove(idx) {
+			continue
+		}
+		// if !unmodified.Contains(idx) {
+		// 	continue
+		// }
 		pool.InChan <- WorkerInput{idx, BlindInput{w, v}}
-		unmodified.Remove(idx)
+		// unmodified.Remove(idx)
 	}
+
+	filled := uint64(M.Size()) - unmodified.GetCardinality()
+	pool.nJobs = filled
 
 	if sum {
 		d.party.RunParallelDelegate(M, pool, BlindEGWorker, ctxSum)
@@ -55,7 +65,6 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 		d.party.RunParallelDelegate(M, pool, BlindAESWorker, ctxInt)
 	}
 
-	filled := uint64(M.Size()) - unmodified.GetCardinality()
 	d.party.log.Printf("filled slots=%d (expected=%f) / prop=%f\n", filled, E_FullSlots(float64(M.Size()), float64(len(d.party.X))), float64(filled)/float64(len(d.party.X)))
 
 	pool = NewWorkerPool(unmodified.GetCardinality())
