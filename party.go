@@ -112,7 +112,7 @@ func (p *Party) BlindEncrypt(M, R *HashMapValues, sum bool) *HashMapFinal {
 	pool := NewWorkerPool(uint64(length))
 	for i := 0; i < length; i++ {
 		final.Q[i] = R.DHData[i].Q
-		pool.InChan <- WorkerInput{uint64(i), EncryptInput{&M.EncData[i], &R.DHData[i].S}}
+		pool.InChan <- WorkerInput{id: uint64(i), data: EncryptInput{&M.EncData[i], &R.DHData[i].S}}
 	}
 	var res []WorkerOutput
 	if sum {
@@ -164,7 +164,7 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 		if !unmodified.CheckedRemove(idx) {
 			continue
 		}
-		pool.InChan <- WorkerInput{idx, MPSIReduceInput{w, R.DHData[idx].Q, R.DHData[idx].S, M.DHData[idx].S}}
+		pool.InChan <- WorkerInput{id: idx, data: MPSIReduceInput{w, R.DHData[idx].Q, R.DHData[idx].S, M.DHData[idx].S}}
 	}
 
 	njobs := uint64(M.Size()) - unmodified.GetCardinality()
@@ -173,14 +173,14 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", njobs, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(njobs)/float64(len(p.X)))
 
-	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1, p.h2c}
+	dhCtx := DHCtx{ctx: &p.ctx.ecc, L: L, isP1: (p.id == 1), h2c: p.h2c}
 	p.RunParallel(R, pool, MPSIReduceWorker, dhCtx)
 
 	// Randomize all unmodified indices
 	pool = NewWorkerPool(uint64(unmodified.GetCardinality()))
 	k := unmodified.Iterator()
 	for k.HasNext() {
-		pool.InChan <- WorkerInput{k.Next(), RandomizeInput{}}
+		pool.InChan <- WorkerInput{id: k.Next(), data: RandomizeInput{}}
 	}
 	p.RunParallel(R, pool, RandomizeWorker, dhCtx)
 	p.log.Printf("randomized slots=%d\n", unmodified.GetCardinality())
@@ -210,14 +210,14 @@ func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool)
 		if !unmodified.CheckedRemove(idx) {
 			continue
 		}
-		pool.InChan <- WorkerInput{idx, HashAndReduceInput{w, M.DHData[idx].S}}
+		pool.InChan <- WorkerInput{id: idx, data: HashAndReduceInput{w, M.DHData[idx].S}}
 	}
 
 	njobs := uint64(M.Size()) - unmodified.GetCardinality()
 	pool.nJobs = njobs
 	fmt.Println("njobs", p.id, njobs)
 
-	dhCtx := DHCtx{&p.ctx.ecc, L, p.id == 1, p.h2c}
+	dhCtx := DHCtx{ctx: &p.ctx.ecc, L: L, isP1: (p.id == 1), h2c: p.h2c}
 	modified := M.Size() - unmodified.GetCardinality()
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
 	p.RunParallel(R, pool, HashAndReduceWorker, dhCtx)
@@ -228,14 +228,14 @@ func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool)
 	if p.id == 1 {
 		// Randomize all unmodified indices
 		for k.HasNext() {
-			pool.InChan <- WorkerInput{k.Next(), RandomizeInput{}}
+			pool.InChan <- WorkerInput{id: k.Next(), data: RandomizeInput{}}
 		}
 		workerFn = RandomizeWorker
 	} else {
 		// DH Reduce all unmodified indices
 		for k.HasNext() {
 			idx := k.Next()
-			pool.InChan <- WorkerInput{idx, ReduceInput{R.DHData[idx].Q, R.DHData[idx].S}}
+			pool.InChan <- WorkerInput{id: idx, data: ReduceInput{R.DHData[idx].Q, R.DHData[idx].S}}
 		}
 		workerFn = ReduceWorker
 	}

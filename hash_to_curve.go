@@ -18,16 +18,6 @@ var four big.Int = *new(big.Int).SetInt64(4)
 
 /* -------------------------------------------------------------------------- */
 
-type HashFunction func([]byte) []byte
-
-type HtoCParams struct {
-	A, B, q, Z *big.Int
-	DST        string
-	k, m, L, h int
-	H          HashFunction
-	b, s       int
-}
-
 func NewHtoCParams(suite string) (*HtoCParams, error) {
 	var A, B, q, Z *big.Int
 	var DST string
@@ -81,7 +71,7 @@ func NewHtoCParams(suite string) (*HtoCParams, error) {
 	}
 
 	L = int(math.Ceil(float64(q.BitLen()+k) / 8)) // expansion size in bytes
-	return &HtoCParams{A, B, q, Z, DST, k, m, L, h, H, b, s}, nil
+	return &HtoCParams{A: A, B: B, q: q, Z: Z, DST: DST, k: k, m: m, L: L, h: h, H: H, b: b, s: s}, nil
 }
 
 /* -------------------------------------------------------------------------- */

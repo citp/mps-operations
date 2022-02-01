@@ -21,7 +21,7 @@ func StartWorker(fn WorkerFunc, ctx WorkerCtx, InChan InputChannel, OutChan Outp
 		if job.id == 0 && job.data == nil {
 			break
 		}
-		OutChan <- WorkerOutput{job.id, fn(ctx, job.data)}
+		OutChan <- WorkerOutput{id: job.id, data: fn(ctx, job.data)}
 	}
 	// for job := range InChan {
 	// OutChan <- WorkerOutput{job.id, fn(ctx, job.data)}

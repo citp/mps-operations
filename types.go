@@ -22,9 +22,9 @@ type Party struct {
 
 type Delegate struct {
 	party  Party
+	aesKey []byte
 	L      DHElement
 	alpha  DHScalar
-	aesKey []byte
 }
 
 // #############################################################################
@@ -41,8 +41,8 @@ type DHElement struct {
 
 type EGContext struct {
 	ecc     DHContext
-	table   map[string]big.Int
 	n, Ny   []*big.Int
+	table   map[string]big.Int
 	N       *big.Int
 	nModuli uint
 }
@@ -76,8 +76,8 @@ type Set struct {
 }
 
 type ChanMsg struct {
-	id   uint64
 	data interface{}
+	id   uint64
 }
 
 type WorkerInput ChanMsg
@@ -95,6 +95,18 @@ type WorkerPool struct {
 
 type Stopwatch struct {
 	start time.Time
+}
+
+// #############################################################################
+
+type HashFunction func([]byte) []byte
+
+type HtoCParams struct {
+	DST        string
+	A, B, q, Z *big.Int
+	k, m, L, h int
+	H          HashFunction
+	b, s       int
 }
 
 // #############################################################################
@@ -128,21 +140,21 @@ type EncryptInput struct {
 }
 
 type UnblindInput struct {
-	Q   DHElement
 	AES []byte
+	Q   DHElement
 }
 
 type BlindCtxInt struct {
+	sk    []byte
 	ctx   *DHContext
 	alpha DHScalar
-	sk    []byte
 	h2c   *HtoCParams
 }
 
 type BlindCtxSum struct {
+	pk    DHElement
 	ctx   *EGContext
 	alpha DHScalar
-	pk    DHElement
 	sk    DHScalar
 	h2c   *HtoCParams
 }
@@ -150,10 +162,10 @@ type BlindCtxSum struct {
 type H2CCtx elliptic.Curve
 
 type DHCtx struct {
-	ctx  *DHContext
 	L    DHElement
-	isP1 bool
+	ctx  *DHContext
 	h2c  *HtoCParams
+	isP1 bool
 }
 
 type EncryptCtx struct {
@@ -164,8 +176,8 @@ type EncryptCtx struct {
 type H2COutput DHElement
 
 type DHOutput struct {
-	Q, S DHElement
 	Ct   Ciphertext
+	Q, S DHElement
 }
 
 type EncryptOutput []byte

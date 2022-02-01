@@ -37,9 +37,9 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 	var ctxInt BlindCtxInt
 
 	if sum {
-		ctxSum = BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk, d.party.h2c}
+		ctxSum = BlindCtxSum{ctx: &d.party.ctx, alpha: d.alpha, pk: d.party.agg_pk, sk: d.party.partial_sk, h2c: d.party.h2c}
 	} else {
-		ctxInt = BlindCtxInt{&d.party.ctx.ecc, d.alpha, d.aesKey, d.party.h2c}
+		ctxInt = BlindCtxInt{ctx: &d.party.ctx.ecc, alpha: d.alpha, sk: d.aesKey, h2c: d.party.h2c}
 	}
 
 	pool := NewWorkerPool(uint64(len(d.party.X)))
@@ -49,7 +49,7 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 		if !unmodified.CheckedRemove(idx) {
 			continue
 		}
-		pool.InChan <- WorkerInput{idx, BlindInput{w, v}}
+		pool.InChan <- WorkerInput{data: BlindInput{w, v}, id: idx}
 	}
 
 	filled := uint64(M.Size()) - unmodified.GetCardinality()
@@ -66,7 +66,7 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 	pool = NewWorkerPool(unmodified.GetCardinality())
 	k := unmodified.Iterator()
 	for k.HasNext() {
-		pool.InChan <- WorkerInput{k.Next(), RandomizeInput{}}
+		pool.InChan <- WorkerInput{id: k.Next(), data: RandomizeInput{}}
 	}
 	if sum {
 		d.party.RunParallelDelegate(M, pool, RandomizeEGDelegateWorker, ctxSum)
@@ -82,14 +82,14 @@ func (d *Delegate) DelegateFinish(R *HashMapFinal, sum bool) (int, *EGCiphertext
 	sz := len(R.Q)
 	pool := NewWorkerPool(uint64(sz))
 	for i := 0; i < sz; i++ {
-		pool.InChan <- WorkerInput{uint64(i), UnblindInput{R.Q[i], R.AES[i]}}
+		pool.InChan <- WorkerInput{id: uint64(i), data: UnblindInput{Q: R.Q[i], AES: R.AES[i]}}
 	}
 
 	var res []WorkerOutput
 	var ctSum EGCiphertext
 	count := 0
 	if sum {
-		res = pool.Run(UnblindEGWorker, BlindCtxSum{&d.party.ctx, d.alpha, d.party.agg_pk, d.party.partial_sk, d.party.h2c})
+		res = pool.Run(UnblindEGWorker, BlindCtxSum{ctx: &d.party.ctx, alpha: d.alpha, pk: d.party.agg_pk, sk: d.party.partial_sk, h2c: d.party.h2c})
 
 		first := true
 		for i := 0; i < len(res); i++ {
@@ -105,7 +105,7 @@ func (d *Delegate) DelegateFinish(R *HashMapFinal, sum bool) (int, *EGCiphertext
 			}
 		}
 	} else {
-		res = pool.Run(UnblindAESWorker, BlindCtxInt{&d.party.ctx.ecc, d.alpha, d.aesKey, d.party.h2c})
+		res = pool.Run(UnblindAESWorker, BlindCtxInt{ctx: &d.party.ctx.ecc, alpha: d.alpha, sk: d.aesKey, h2c: d.party.h2c})
 
 		for i := 0; i < len(res); i++ {
 			data, _ := res[i].data.(string)
