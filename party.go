@@ -95,42 +95,6 @@ func (p *Party) Partial_Decrypt(ct *EGCiphertext) []DHElement {
 	return p.ctx.EGMP_Decrypt(p.partial_sk, ct)
 }
 
-// func (p *Party) Initialize_R(M *HashMapValues, R *HashMapValues) {
-// 	if p.id != 1 {
-// 		return
-// 	}
-
-// 	defer Timer(time.Now(), p.log, "Initialize_R")
-
-// 	*R = NewHashMap(M.nBits)
-// 	inputs := make([]WorkerInput, 0)
-
-// 	unmodified := GetBitMap(M.Size())
-// 	for w := range p.X {
-// 		idx := GetIndex(w, R.nBits)
-// 		if !unmodified.Contains(idx) {
-// 			continue
-// 		}
-// 		inputs = append(inputs, WorkerInput{idx, H2CInput(w)})
-// 		R.DHData[idx].S = M.DHData[idx].S
-// 		unmodified.Remove(idx)
-// 	}
-
-// 	pool := NewWorkerPool(uint64(len(inputs)))
-// 	for _, v := range inputs {
-// 		pool.InChan <- v
-// 	}
-
-// 	res := pool.Run(H2CWorker, H2CCtx(p.ctx.ecc.Curve))
-// 	Assert(len(res) == len(inputs))
-
-// 	for i := 0; i < len(res); i++ {
-// 		data, ok := res[i].data.(H2COutput)
-// 		Assert(ok)
-// 		R.DHData[res[i].id].Q = DHElement(data)
-// 	}
-// }
-
 func (p *Party) BlindEncrypt(M, R *HashMapValues, sum bool) *HashMapFinal {
 	if p.id != p.n {
 		return nil
@@ -148,8 +112,6 @@ func (p *Party) BlindEncrypt(M, R *HashMapValues, sum bool) *HashMapFinal {
 	pool := NewWorkerPool(uint64(length))
 	for i := 0; i < length; i++ {
 		final.Q[i] = R.DHData[i].Q
-		// final.Q[i].x = new(big.Int).Set(R.DHData[i].Q.x)
-		// final.Q[i].y = new(big.Int).Set(R.DHData[i].Q.y)
 		pool.InChan <- WorkerInput{uint64(i), EncryptInput{&M.EncData[i], &R.DHData[i].S}}
 	}
 	var res []WorkerOutput

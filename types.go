@@ -10,28 +10,28 @@ import (
 // #############################################################################
 
 type Party struct {
-	id, n, nBits int
 	ctx          EGContext
-	X            map[string]int
-	log          *log.Logger
-	showP        bool
-	partial_sk   *big.Int
 	agg_pk       DHElement
+	X            map[string]int
+	id, n, nBits int
+	log          *log.Logger
+	partial_sk   *big.Int
 	h2c          *HtoCParams
+	showP        bool
 }
 
 type Delegate struct {
 	party  Party
-	alpha  DHScalar
 	L      DHElement
+	alpha  DHScalar
 	aesKey []byte
 }
 
 // #############################################################################
 
 type DHContext struct {
-	Curve elliptic.Curve
 	G     DHElement
+	Curve elliptic.Curve
 }
 
 type DHScalar *big.Int
@@ -41,10 +41,10 @@ type DHElement struct {
 
 type EGContext struct {
 	ecc     DHContext
+	table   map[string]big.Int
 	n, Ny   []*big.Int
 	N       *big.Int
 	nModuli uint
-	table   map[string]big.Int
 }
 
 type EGCiphertext struct {
@@ -57,8 +57,8 @@ type Ciphertext struct {
 }
 
 type HashMapValues struct {
-	DHData  []HashMapValue
 	EncData []Ciphertext
+	DHData  []HashMapValue
 	nBits   int
 }
 
@@ -88,9 +88,9 @@ type WorkerCtx interface{}
 type WorkerFunc func(WorkerCtx, interface{}) interface{}
 
 type WorkerPool struct {
-	nJobs   uint64
 	InChan  InputChannel
 	OutChan OutputChannel
+	nJobs   uint64
 }
 
 type Stopwatch struct {

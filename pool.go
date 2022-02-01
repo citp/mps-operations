@@ -9,9 +9,9 @@ import (
 
 func NewWorkerPool(nJobs uint64) *WorkerPool {
 	return &WorkerPool{
-		nJobs,
 		make(InputChannel, nJobs),
 		make(OutputChannel, nJobs),
+		nJobs,
 	}
 }
 

@@ -1,10 +1,9 @@
 module mps_operations
 
-go 1.13
+go 1.17
 
 require (
 	github.com/RoaringBitmap/roaring v0.9.4
-	github.com/alitto/pond v1.7.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/pkg/profile v1.6.0
 	github.com/schollz/progressbar/v3 v3.8.5

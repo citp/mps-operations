@@ -13,7 +13,7 @@ func (p *Party) RunParallelDelegate(R *HashMapValues, pool *WorkerPool, fn Worke
 	for i := 0; i < len(res); i++ {
 		data, ok := res[i].data.(DHOutput)
 		Assert(ok)
-		R.DHData[res[i].id] = HashMapValue{data.Q, data.S}
+		R.DHData[res[i].id] = HashMapValue{DHElement{}, data.S}
 		R.EncData[res[i].id] = data.Ct
 	}
 }
@@ -49,11 +49,7 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 		if !unmodified.CheckedRemove(idx) {
 			continue
 		}
-		// if !unmodified.Contains(idx) {
-		// 	continue
-		// }
 		pool.InChan <- WorkerInput{idx, BlindInput{w, v}}
-		// unmodified.Remove(idx)
 	}
 
 	filled := uint64(M.Size()) - unmodified.GetCardinality()

@@ -55,7 +55,7 @@ func GetBitMap(sz uint64) *roaring64.Bitmap {
 
 func NewHashMap(nBits int) HashMapValues {
 	m := 1 << nBits
-	return HashMapValues{make([]HashMapValue, m), make([]Ciphertext, m), nBits}
+	return HashMapValues{make([]Ciphertext, m), make([]HashMapValue, m), nBits}
 }
 
 func (m *HashMapValues) Size() uint64 {
