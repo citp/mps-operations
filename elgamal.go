@@ -26,7 +26,7 @@ func NewEGContext(ret *EGContext, numModuli, maxBits uint) {
 	fmt.Println("")
 	fmt.Println("N:", ret.N.Text(10))
 
-	ret.genTable(12) // Works for up to 32-bit sums
+	ret.genTable(14) // Works for up to 32-bit sums
 }
 
 func (ctx *EGContext) genModuli(bitSize uint) {
