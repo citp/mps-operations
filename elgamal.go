@@ -36,13 +36,11 @@ func (ctx *EGContext) genModuli(bitSize uint) {
 	i := 0
 	ctx.N.SetInt64(1)
 	for i < int(ctx.nModuli) {
-		// ctx.n[i], err = crand.Int(crand.Reader, new(big.Int).Lsh(&one, bitSize))
 		ctx.n[i], err = crand.Prime(crand.Reader, int(bitSize))
 		Panic(err)
 		coPrime := true
 		for j := 0; j < i; j++ {
 			gcd.GCD(nil, nil, ctx.n[i], ctx.n[j])
-			// Assert(gcd.Cmp(&one) == 0)
 			if gcd.Cmp(&one) != 0 {
 				coPrime = false
 			}
@@ -92,7 +90,6 @@ func (ctx *EGContext) BSGS(beta *DHElement) *big.Int {
 			return new(big.Int).Add(&j, big.NewInt(i*m))
 		}
 		ctx.ecc.EC_Add(gamma, GminusM, &gamma)
-		// fmt.Println("Giant step")
 	}
 
 	return nil
@@ -106,12 +103,6 @@ func (ctx *EGContext) decrypt(sk DHScalar, c1, c2, Pm *DHElement) {
 	ctx.ecc.EC_Negate(&cPrime)
 	ctx.ecc.EC_Add(cPrime, *c2, Pm)
 }
-
-// func (ctx *EGContext) decryptCheck(sk DHScalar, c1, c2, Gm *DHElement) bool {
-// 	var GmPrime DHElement
-// 	ctx.decrypt(sk, c1, c2, &GmPrime)
-// 	return GmPrime.String() == Gm.String()
-// }
 
 func (ctx *EGContext) encryptZero(pk, c1, c2 *DHElement) {
 	k := ctx.ecc.RandomScalar()
@@ -136,29 +127,17 @@ func (ctx *EGContext) mapToInt(Pm []DHElement, m *big.Int) {
 	var term big.Int
 
 	for i := 0; i < int(ctx.nModuli); i++ {
-		// a := ctx.lookup_mod(string(Pm[i].Serialize()), ctx.n[i])
-		// a, ok := ctx.lookup(string(Pm[i].Serialize()))
 		a := ctx.BSGS(&Pm[i])
 		Assert(a != nil)
-		// Assert(ok)
-		// fmt.Print(i, " ~ ", a.Text(10), " ")
 		term.Mul(a, ctx.Ny[i])
 		term.Mod(&term, ctx.N)
 		m.Add(m, &term)
 	}
 	m.Mod(m, ctx.N)
-	// fmt.Println("")
 }
-
-// func (ctx *EGContext) lookup_mod(s string, mod *big.Int) big.Int {
-// 	for {
-// 		a, ok := ctx.lookup(s)
-// 	}
-// }
 
 func (ctx *EGContext) lookup(s string) (big.Int, bool) {
 	a, ok := ctx.table[s]
-	// Assert(ok)
 	return a, ok
 }
 
@@ -215,15 +194,7 @@ func (ctx *EGContext) EG_EncryptZero(pk *DHElement, ct *EGCiphertext) {
 	ct.c2 = make([]DHElement, ctx.nModuli)
 	for i := 0; i < int(ctx.nModuli); i++ {
 		ctx.encryptZero(pk, &ct.c1[i], &ct.c2[i])
-
-		// 	ctx.ecc.RandomElement(&ct.c1[i])
-		// 	ctx.ecc.RandomElement(&ct.c2[i])
 	}
-	// m := big.NewInt(0)
-	// ctx.EG_Encrypt(pk, m, ct)
-
-	// ct.c1 = ctx.ecc.RandomElements(int(ctx.nModuli))
-	// ct.c2 = ctx.ecc.RandomElements(int(ctx.nModuli))
 }
 
 func (ctx *EGContext) EG_Serialize(ct *EGCiphertext) []byte {

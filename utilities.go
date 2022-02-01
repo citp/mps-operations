@@ -23,27 +23,10 @@ import (
 )
 
 // #############################################################################
-// var _p *big.Int
 
 func GetIndex(key string, nBits int) uint64 {
-	// var err error
-	// if _p.Cmp(big.NewInt(0)) == 0 {
-	// 	_p, err = crand.Prime(crand.Reader, nBits)
-	// 	Check(err)
-	// }
-	// h := big.NewInt(int64(HashPrefix([]byte(key), nBits+1)))
-	// h = h.Mod(h, _p)
-	// return h.Uint64()
 	return HashPrefix([]byte(key), nBits)
 }
-
-// func GetEmptyMap(sz uint64) map[uint64]bool {
-// 	empty := make(map[uint64]bool, sz)
-// 	for i := uint64(0); i < sz; i++ {
-// 		empty[i] = true
-// 	}
-// 	return empty
-// }
 
 func GetBitMap(sz uint64) *roaring64.Bitmap {
 	m := roaring64.New()
@@ -90,11 +73,6 @@ func HashPrefix(msg []byte, sz int) uint64 {
 
 func RandomBytes(n int) []byte {
 	return frand.Bytes(n)
-	// ret := make([]byte, n)
-	// nR, err := io.ReadFull(crand.Reader, ret)
-	// Assert(nR == n)
-	// Panic(err)
-	// return ret
 }
 
 func RandomPrime(n int) *big.Int {
@@ -269,7 +247,6 @@ func (d *SampleData) GenerateIU(N0, Ni, intCard, lim int) {
 	Uarr := U2.Clone()
 	for i := 1; i < nParties; i++ {
 		for sets[i].Size() < Ni {
-			// k := Uarr[rand.Intn(len(Uarr))]
 			w := Uarr.GetRandom()
 			if !sets[i].Contains(w) {
 				sets[i].Add(w, Uarr.data[w])
@@ -467,28 +444,6 @@ func Cardinality(X_ADs []map[string]int, mpsi bool) []int {
 		return []int{union.Size(), union.ADSum()}
 	}
 }
-
-// func IntersectionWithUnionCardinality(Xs [][]string) float64 {
-// 	nParties := len(Xs)
-// 	sets := make([]Set, nParties)
-// 	for i := 0; i < nParties; i++ {
-// 		sets[i] = *NewSet(Xs[i])
-// 	}
-
-// 	var union *Set
-// 	if nParties <= 2 {
-// 		union = &sets[1]
-// 	} else {
-// 		union = sets[1].Union(&sets[2])
-// 	}
-
-// 	for i := 3; i < nParties; i++ {
-// 		union = union.Union(&sets[i])
-// 	}
-
-// 	union = union.Intersection(&sets[0])
-// 	return float64(union.Size())
-// }
 
 // #############################################################################
 

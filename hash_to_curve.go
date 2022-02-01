@@ -145,7 +145,6 @@ func Sqrt(x, p *big.Int) *big.Int {
 	p1.Add(p, &one)
 	exp.Div(&p1, &four)
 	return ret.Exp(x, &exp, p)
-	// return new(big.Int).Exp(x, &exp, p)
 }
 
 func (params *HtoCParams) SqrtRatio3Mod4(u, v *big.Int) (bool, big.Int) {
