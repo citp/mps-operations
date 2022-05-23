@@ -11,8 +11,6 @@ import (
 	"runtime"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var nParties = flag.Int("n", 3, "no. of parties (excluding delegate)")
@@ -383,8 +381,8 @@ func HToC_Tester(t *testing.T, suite string, testRes [][]string, curve elliptic.
 	for i, p := range testRes {
 		fmt.Println("msg:", msgs[i])
 		HashToCurve_13(msgs[i], &P, curve, params)
-		assert.EqualValues(t, p[0], P.x.Text(16))
-		assert.EqualValues(t, p[1], P.y.Text(16))
+		Assert(p[0] == P.x.Text(16))
+		Assert(p[1] == P.y.Text(16))
 	}
 }
 
