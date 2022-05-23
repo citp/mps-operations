@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"os"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 // #############################################################################
@@ -169,7 +171,7 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 
 	njobs := uint64(M.Size()) - unmodified.GetCardinality()
 	pool.nJobs = njobs
-	fmt.Println("njobs", p.id, njobs)
+	color.Red(fmt.Sprintf("{LOG}\t\tParty %d: Modified %d indices", p.id, njobs))
 
 	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", njobs, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(njobs)/float64(len(p.X)))
 

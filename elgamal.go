@@ -2,7 +2,6 @@ package main
 
 import (
 	crand "crypto/rand"
-	"fmt"
 	"math"
 	"math/big"
 )
@@ -16,15 +15,15 @@ func NewEGContext(ret *EGContext, numModuli, maxBits uint) {
 	ret.n = make([]*big.Int, numModuli)
 	ret.Ny = make([]*big.Int, numModuli)
 
-	fmt.Println("Bitsize:", bitSize+1)
+	// fmt.Println("Bitsize:", bitSize+1)
 
 	ret.genModuli(bitSize + 1)
-	fmt.Print("Moduli: ")
-	for i := 0; i < int(numModuli); i++ {
-		fmt.Print(ret.n[i].Text(10), " ")
-	}
-	fmt.Println("")
-	fmt.Println("N:", ret.N.Text(10))
+	// fmt.Print("Moduli: ")
+	// for i := 0; i < int(numModuli); i++ {
+	// fmt.Print(ret.n[i].Text(10), " ")
+	// }
+	// fmt.Println("")
+	// fmt.Println("N:", ret.N.Text(10))
 
 	ret.genTable(14) // Works for up to 32-bit sums
 }
@@ -61,7 +60,7 @@ func (ctx *EGContext) genModuli(bitSize uint) {
 
 func (ctx *EGContext) genTable(bitSize uint) {
 	maxV := 1 << (bitSize + 1)
-	fmt.Println("maxV:", maxV)
+	// fmt.Println("maxV:", maxV)
 
 	var val DHElement
 	ctx.table = make(map[string]big.Int)

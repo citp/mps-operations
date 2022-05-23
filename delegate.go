@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math/big"
 	"time"
 )
@@ -115,7 +114,6 @@ func (d *Delegate) DelegateFinish(R *HashMapFinal, sum bool) (int, *EGCiphertext
 		}
 	}
 
-	fmt.Println("Count:", count)
 	if sum {
 		return count, &ctSum
 	}

@@ -281,7 +281,6 @@ func (d *SampleData) ComputeStats(mpsi bool) []float64 {
 	ret := Cardinality(d.X_ADs, mpsi)
 	retFl := make([]float64, len(ret))
 	for i, v := range ret {
-		fmt.Printf("%d, %d\n", i, v)
 		retFl[i] = float64(v)
 	}
 

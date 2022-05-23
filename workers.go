@@ -18,6 +18,8 @@ func BlindEGWorker(a WorkerCtx, b interface{}) interface{} {
 	HashToCurve_13(arg.w, &h, ctx.ctx.ecc.Curve, ctx.h2c)
 	ctx.ctx.ecc.EC_Multiply(ctx.alpha, h, &output.S)
 	m.SetInt64(int64(arg.v))
+	// fmt.Println(m.String(), int64(arg.v))
+	// fmt.Println(ctx.pk)
 	ctx.ctx.EG_Encrypt(&ctx.pk, &m, &output.Ct.EG)
 	return output
 }

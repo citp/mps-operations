@@ -1,34 +1,40 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/pkg/profile"
+	"github.com/spf13/viper"
 )
 
 // #############################################################################
 
 func PrintInfo(logger *log.Logger, protoName, dataDir, resDir string, nParties, nHashes0, nHashesI, intCard, nBits int, showP, eProfile bool) {
-	tabs := "\t"
-	logger.Printf("Time%s%s\n", tabs, time.Now().String())
-	logger.Printf("Protocol%s%s\n", tabs, protoName)
-	logger.Printf("Parties%s%d\n", tabs, nParties)
-	logger.Printf("Delegate%sP_0\n", tabs)
-	logger.Printf("|X_0|%s%d\n", tabs, nHashes0)
-	logger.Printf("|X_i|%s%d\n", tabs, nHashesI)
-	logger.Printf("|I|%s%d\n", tabs, intCard)
-	logger.Printf("|M|%s%d\n", tabs, 1<<nBits)
-	logger.Printf("Data %s./%s\n", tabs, dataDir)
-	logger.Printf("Results %s./%s\n", tabs, resDir)
-	logger.Printf("Bar %s%s\n", tabs, strconv.FormatBool(showP))
-	logger.Printf("Profile %s%s\n", tabs, strconv.FormatBool(eProfile))
+
+	color.Set(color.FgBlue, color.Bold)
+	defer color.Unset()
+
+	sep := ": "
+	logger.Printf("Time%s%s\n", sep, time.Now().String())
+	logger.Printf("Protocol%s%s\n", sep, protoName)
+	logger.Printf("Parties%s%d\n", sep, nParties)
+	logger.Printf("Delegate%sP_0\n", sep)
+	logger.Printf("|X_0|%s%d\n", sep, nHashes0)
+	logger.Printf("|X_i|%s%d\n", sep, nHashesI)
+	logger.Printf("|I|%s%d\n", sep, intCard)
+	logger.Printf("|M|%s%d\n", sep, 1<<nBits)
+	logger.Printf("Data%s./%s\n", sep, dataDir)
+	logger.Printf("Results%s./%s\n", sep, resDir)
+	logger.Printf("Bar%s%s\n", sep, strconv.FormatBool(showP))
+	logger.Printf("Profile%s%s\n", sep, strconv.FormatBool(eProfile))
 }
 
 func Save(proto, nParties, nHashes0, nHashesI, nBits int, card, cardComputed float64, times []time.Duration, fname string) {
@@ -49,49 +55,71 @@ func RunInit(nParties, nBits int, fpaths []string, lPath string, showP bool) (De
 	var watch Stopwatch
 	var times []time.Duration
 	var ctx EGContext
+	pks := make([]DHElement, nParties+1)
 
 	// Initialize
 	watch.Reset()
-	NewEGContext(&ctx, 3, 33)
+	NewEGContext(&ctx, 2, 33)
 	delegate.Init(0, nParties, nBits, fpaths[0], lPath, showP, &ctx)
+	pks[0] = delegate.party.Partial_PubKey()
 	times = append(times, watch.Elapsed())
 
 	for i := 1; i <= nParties; i++ {
 		watch.Reset()
 		parties[i-1].Init(i, nParties, nBits, fpaths[i], lPath, showP, &ctx)
+		pks[i] = parties[i-1].Partial_PubKey()
 		times = append(times, watch.Elapsed())
+	}
+
+	delegate.party.Set_AggPubKey(pks)
+	for i := 1; i <= nParties; i++ {
+		parties[i-1].Set_AggPubKey(pks)
 	}
 
 	return delegate, parties, times
 }
 
-func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (float64, []time.Duration) {
+func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (float64, *big.Int, []time.Duration) {
 	var watch Stopwatch
 	var times []time.Duration
 	// Round1
 	var M, R HashMapValues
 	var final *HashMapFinal
 	M = NewHashMap(delegate.party.nBits)
+	sum := (proto%2 == 1)
 
 	watch.Reset()
-	delegate.DelegateStart(&M, true) // TODO: change
+	delegate.DelegateStart(&M, sum) // TODO: change
 	times = append(times, watch.Elapsed())
 	for i := 0; i < nParties; i++ {
-		if proto == 1 {
+		if proto <= 1 {
 			watch.Reset()
-			final = parties[i].MPSI(delegate.L, &M, &R, true) // TODO: Change
+			final = parties[i].MPSI(delegate.L, &M, &R, sum) // TODO: Change
 			times = append(times, watch.Elapsed())
-		} else if proto == 2 {
+		} else {
 			watch.Reset()
-			final = parties[i].MPSIU(delegate.L, &M, &R, true) // TODO: Change
+			final = parties[i].MPSIU(delegate.L, &M, &R, sum) // TODO: Change
 			times = append(times, watch.Elapsed())
 		}
 	}
 
 	// Round2
+	fmt.Println("")
 	watch.Reset()
-	cardComputed, _ := delegate.DelegateFinish(final, true) // TODO: Change
+	partials := make([][]DHElement, nParties+1)
+	cardComputed, ctSum := delegate.DelegateFinish(final, sum)
+	// TODO: Change
 	times = append(times, watch.Elapsed())
+
+	var computedSum big.Int
+	if sum {
+		// Round 3
+		partials[0] = delegate.party.Partial_Decrypt(ctSum)
+		for i := 1; i <= nParties; i++ {
+			partials[i] = parties[i-1].Partial_Decrypt(ctSum)
+		}
+		computedSum = delegate.JointDecryption(ctSum, partials)
+	}
 
 	delegate.party.log.Printf("Computation: %d EC point mul.\n", delegate.party.TComputation(proto, &R))
 	delegate.party.log.Printf("Communication: %f MB\n", float64(delegate.party.TCommunication(&R))/1e6)
@@ -100,35 +128,49 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 		parties[i].log.Printf("Communication: %f MB\n", float64(delegate.party.TCommunication(&R))/1e6)
 	}
 
-	return float64(cardComputed), times
+	return float64(cardComputed), &computedSum, times
 }
 
 // #############################################################################
 
 func main() {
-	// Experiment()
-	mainProtocol()
-}
+	color.Set(color.BgBlue, color.Bold, color.Underline)
+	color.Red("Multiparty Private Set Operations")
+	color.Unset()
 
-func mainProtocol() {
 	var nParties, nHashes0, nHashesI, intCard, lim, nBits, proto int
 	var dataDir, resDir string
 	var eProfile, showP bool
 
-	flag.IntVar(&proto, "p", 1, "protocol (1 = MPSI-CA, 2 = MPSIU-CA)")
-	flag.IntVar(&nParties, "n", 3, "number of parties (excluding delegate)")
-	flag.IntVar(&nHashes0, "h0", 1000, "|x_0|")
-	flag.IntVar(&nHashesI, "hi", 10000, "|x_i|")
-	flag.IntVar(&intCard, "i", 1000, "|intersection(x_0,...,x_n)|")
-	flag.IntVar(&lim, "l", 1000, "upper bound on associated integers")
-	flag.IntVar(&nBits, "b", 17, "number of bits (hash map size = 2^b)")
-	flag.StringVar(&dataDir, "d", "data", "directory containing hashes")
-	flag.StringVar(&resDir, "r", "results", "results directory")
-	flag.BoolVar(&eProfile, "c", false, "enable profiling")
-	flag.BoolVar(&showP, "g", false, "show progress")
-	flag.Parse()
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	Panic(viper.ReadInConfig())
 
-	Assert(proto == 1 || proto == 2)
+	switch viper.GetString("protocol") {
+	case "MPSI":
+		proto = 0
+	case "MPSI-CA":
+		proto = 1
+	case "MPSIU":
+		proto = 2
+	case "MPSIU-CA":
+		proto = 3
+	}
+
+	nParties = viper.GetInt("n")
+	nHashes0 = viper.GetInt("x0")
+	nHashesI = viper.GetInt("xi")
+	intCard = viper.GetInt("i")
+	lim = viper.GetInt("l")
+	nBits = viper.GetInt("b")
+
+	dataDir = viper.GetString("data_dir")
+	resDir = viper.GetString("result_dir")
+
+	eProfile = viper.GetBool("profile")
+	showP = viper.GetBool("progress")
+
+	Assert(proto >= 0 || proto <= 3)
 	Assert(nParties > 1)
 	Assert(nHashesI > nHashes0)
 	Assert(nBits > 9)
@@ -139,11 +181,10 @@ func mainProtocol() {
 		defer profile.Start(profile.ProfilePath("./" + resDir)).Stop()
 	}
 
-	var cardComputed, card float64
 	var watch Stopwatch
 	var times []time.Duration
 	fpaths := make([]string, nParties+1)
-	protoName := []string{"MPSI-CA", "MPSIU-CA"}
+	protoName := []string{"MPSI", "MPSI-CA", "MPSIU", "MPSIU-CA"}
 	for i := range fpaths {
 		fpaths[i] = path.Join(dataDir, fmt.Sprintf("%d.txt", i))
 	}
@@ -151,13 +192,9 @@ func mainProtocol() {
 	_ = os.Mkdir(dataDir, os.ModePerm)
 	_ = os.Mkdir(resDir, os.ModePerm)
 
-	data := NewSampleData(nParties+1, nHashes0, nHashesI, intCard, lim, dataDir, false, (proto == 1))
-	res := data.ComputeStats((proto == 1))
-	card1, card2 := res[0], res[1]
-	card = card1
-	if proto == 2 {
-		card = card2
-	}
+	data := NewSampleData(nParties+1, nHashes0, nHashesI, intCard, lim, dataDir, false, (proto <= 1))
+	res := data.ComputeStats((proto <= 1))
+	trueCard, trueSum := res[0], res[1]
 
 	times = append(times, watch.Elapsed())
 
@@ -168,22 +205,24 @@ func mainProtocol() {
 	loggers := []*log.Logger{parties[0].log, stdout}
 
 	for _, v := range loggers {
-		v.SetPrefix("[INFO] ")
-		PrintInfo(v, protoName[proto-1], dataDir, resDir, nParties, nHashes0, nHashesI, intCard, nBits, showP, eProfile)
+		v.SetPrefix("{CONFIG}\t")
+		PrintInfo(v, protoName[proto], dataDir, resDir, nParties, nHashes0, nHashesI, intCard, nBits, showP, eProfile)
+		fmt.Println("")
 	}
 	parties[0].log.SetPrefix("[Party 1] ")
 
-	cardComputed, _times = RunProtocol(nParties, delegate, parties, proto)
+	cardComputed, sumComputed, _times := RunProtocol(nParties, delegate, parties, proto)
 	times = append(times, _times...)
 
-	for _, v := range loggers {
-		v.SetPrefix("[RSLT] ")
-		v.Printf("True\t%d\n", int(card))
-		v.Printf("Computed\t%d\n", int(cardComputed))
-		v.Printf("Error\t%f\n", ((cardComputed - card) * 100 / card))
+	e1 := (cardComputed - trueCard) * 100 / trueCard
+	color.Green(fmt.Sprintf("{RESULT}\tCount: %d (%d, %f%%)", int(cardComputed), int(trueCard), e1))
+
+	if proto%2 == 1 {
+		e2 := (float64(sumComputed.Int64()) - trueSum) * 100 / trueSum
+		color.Green(fmt.Sprintf("{RESULT}\tSum: %s (%d, %f%%)", sumComputed.Text(10), int(trueSum), e2))
 	}
 
-	Save(proto, nParties, nHashes0, nHashesI, nBits, card, cardComputed, times, resDir+"/timing.csv")
+	Save(proto, nParties, nHashes0, nHashesI, nBits, trueCard, cardComputed, times, resDir+"/timing.csv")
 
 	for _, v := range loggers {
 		v.SetPrefix("")
