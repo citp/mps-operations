@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/RoaringBitmap/roaring/roaring64"
-	"github.com/schollz/progressbar/v3"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/blake2s"
 	"lukechampine.com/frand"
@@ -442,23 +441,6 @@ func Cardinality(X_ADs []map[string]int, mpsi bool) []int {
 		union = sets[0].Intersection(union)
 		return []int{union.Size(), union.ADSum()}
 	}
-}
-
-// #############################################################################
-
-func NewProgressBar(sz int, color, name string) *progressbar.ProgressBar {
-	return progressbar.NewOptions(sz,
-		progressbar.OptionEnableColorCodes(true),
-		progressbar.OptionSetWidth(20),
-		progressbar.OptionSetDescription(fmt.Sprintf("[%s]%s...[reset]", color, name)),
-		progressbar.OptionShowIts(),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]=[reset]",
-			SaucerHead:    "[green]>[reset]",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}))
 }
 
 // #############################################################################

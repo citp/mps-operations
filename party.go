@@ -61,7 +61,7 @@ func (p *Party) TCommunication(R *HashMapValues) uint64 {
 
 // #############################################################################
 
-func (p *Party) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *EGContext) {
+func (p *Party) Init(id, n, nBits int, dPath, lPath string, ctx *EGContext) {
 	logF, err := os.OpenFile(lPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	Panic(err)
 	p.log = log.New(logF, fmt.Sprintf("[Party %d] ", id), 0)
@@ -72,7 +72,7 @@ func (p *Party) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *EGC
 	p.nBits = nBits
 	p.ctx = *ctx
 	p.X = ReadFile(dPath)
-	p.showP = showP
+	p.showP = false
 	p.partial_sk = ctx.ecc.RandomScalar()
 	p.h2c, err = NewHtoCParams("P256_XMD:SHA-256_SSWU_RO_")
 	Panic(err)

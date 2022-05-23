@@ -17,7 +17,7 @@ import (
 
 // #############################################################################
 
-func PrintInfo(logger *log.Logger, protoName, dataDir, resDir string, nParties, nHashes0, nHashesI, intCard, nBits int, showP, eProfile bool) {
+func PrintInfo(logger *log.Logger, protoName, dataDir, resDir string, nParties, nHashes0, nHashesI, intCard, nBits int, eProfile bool) {
 
 	color.Set(color.FgBlue, color.Bold)
 	defer color.Unset()
@@ -33,7 +33,6 @@ func PrintInfo(logger *log.Logger, protoName, dataDir, resDir string, nParties, 
 	logger.Printf("|M|%s%d\n", sep, 1<<nBits)
 	logger.Printf("Data%s./%s\n", sep, dataDir)
 	logger.Printf("Results%s./%s\n", sep, resDir)
-	logger.Printf("Bar%s%s\n", sep, strconv.FormatBool(showP))
 	logger.Printf("Profile%s%s\n", sep, strconv.FormatBool(eProfile))
 }
 
@@ -49,7 +48,7 @@ func Save(proto, nParties, nHashes0, nHashesI, nBits int, card, cardComputed flo
 
 // #############################################################################
 
-func RunInit(nParties, nBits int, fpaths []string, lPath string, showP bool) (Delegate, []Party, []time.Duration) {
+func RunInit(nParties, nBits int, fpaths []string, lPath string) (Delegate, []Party, []time.Duration) {
 	parties := make([]Party, nParties)
 	var delegate Delegate
 	var watch Stopwatch
@@ -60,13 +59,13 @@ func RunInit(nParties, nBits int, fpaths []string, lPath string, showP bool) (De
 	// Initialize
 	watch.Reset()
 	NewEGContext(&ctx, 2, 33)
-	delegate.Init(0, nParties, nBits, fpaths[0], lPath, showP, &ctx)
+	delegate.Init(0, nParties, nBits, fpaths[0], lPath, &ctx)
 	pks[0] = delegate.party.Partial_PubKey()
 	times = append(times, watch.Elapsed())
 
 	for i := 1; i <= nParties; i++ {
 		watch.Reset()
-		parties[i-1].Init(i, nParties, nBits, fpaths[i], lPath, showP, &ctx)
+		parties[i-1].Init(i, nParties, nBits, fpaths[i], lPath, &ctx)
 		pks[i] = parties[i-1].Partial_PubKey()
 		times = append(times, watch.Elapsed())
 	}
@@ -140,7 +139,7 @@ func main() {
 
 	var nParties, nHashes0, nHashesI, intCard, lim, nBits, proto int
 	var dataDir, resDir string
-	var eProfile, showP bool
+	var eProfile bool
 
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
@@ -168,7 +167,6 @@ func main() {
 	resDir = viper.GetString("result_dir")
 
 	eProfile = viper.GetBool("profile")
-	showP = viper.GetBool("progress")
 
 	Assert(proto >= 0 || proto <= 3)
 	Assert(nParties > 1)
@@ -198,7 +196,7 @@ func main() {
 
 	times = append(times, watch.Elapsed())
 
-	delegate, parties, _times := RunInit(nParties, nBits, fpaths, resDir+"/log.txt", showP)
+	delegate, parties, _times := RunInit(nParties, nBits, fpaths, resDir+"/log.txt")
 	times = append(times, _times...)
 
 	stdout := log.New(os.Stdout, "", 0)
@@ -206,7 +204,7 @@ func main() {
 
 	for _, v := range loggers {
 		v.SetPrefix("{CONFIG}\t")
-		PrintInfo(v, protoName[proto], dataDir, resDir, nParties, nHashes0, nHashesI, intCard, nBits, showP, eProfile)
+		PrintInfo(v, protoName[proto], dataDir, resDir, nParties, nHashes0, nHashesI, intCard, nBits, eProfile)
 		fmt.Println("")
 	}
 	parties[0].log.SetPrefix("[Party 1] ")

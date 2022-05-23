@@ -19,8 +19,8 @@ func (p *Party) RunParallelDelegate(R *HashMapValues, pool *WorkerPool, fn Worke
 
 // #############################################################################
 
-func (d *Delegate) Init(id, n, nBits int, dPath, lPath string, showP bool, ctx *EGContext) {
-	d.party.Init(id, n, nBits, dPath, lPath, showP, ctx)
+func (d *Delegate) Init(id, n, nBits int, dPath, lPath string, ctx *EGContext) {
+	d.party.Init(id, n, nBits, dPath, lPath, ctx)
 	d.alpha = d.party.ctx.ecc.RandomScalar()
 	d.aesKey = RandomBytes(32)
 	d.party.ctx.ecc.EC_BaseMultiply(d.alpha, &d.L)
