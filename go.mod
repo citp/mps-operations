@@ -7,10 +7,11 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/pkg/profile v1.6.0
 	github.com/spf13/viper v1.11.0
-	github.com/stretchr/testify v1.7.1
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 	lukechampine.com/frand v1.4.2
 )
+
+require github.com/stretchr/testify v1.7.1
 
 require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
