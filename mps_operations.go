@@ -41,9 +41,7 @@ func Save(proto, nParties, nHashes0, nHashesI, nBits int, card, cardComputed flo
 	for i := 0; i < len(times); i++ {
 		strs = append(strs, times[i].String())
 	}
-	fline := strings.Join(strs, ",")
-	fmt.Println(fline)
-	AppendFile(fname, []string{fline})
+	AppendFile(fname, []string{strings.Join(strs, ",")})
 }
 
 // #############################################################################
@@ -136,6 +134,7 @@ func main() {
 	color.Set(color.BgBlue, color.Bold, color.Underline)
 	color.Red("Multiparty Private Set Operations")
 	color.Unset()
+	fmt.Println("")
 
 	var nParties, nHashes0, nHashesI, intCard, lim, nBits, proto int
 	var dataDir, resDir string
@@ -200,14 +199,9 @@ func main() {
 	times = append(times, _times...)
 
 	stdout := log.New(os.Stdout, "", 0)
-	loggers := []*log.Logger{parties[0].log, stdout}
-
-	for _, v := range loggers {
-		v.SetPrefix("{CONFIG}\t")
-		PrintInfo(v, protoName[proto], dataDir, resDir, nParties, nHashes0, nHashesI, intCard, nBits, eProfile)
-		fmt.Println("")
-	}
-	parties[0].log.SetPrefix("[Party 1] ")
+	stdout.SetPrefix("{CONFIG}\t")
+	PrintInfo(stdout, protoName[proto], dataDir, resDir, nParties, nHashes0, nHashesI, intCard, nBits, eProfile)
+	fmt.Println("")
 
 	cardComputed, sumComputed, _times := RunProtocol(nParties, delegate, parties, proto)
 	times = append(times, _times...)
@@ -221,11 +215,6 @@ func main() {
 	}
 
 	Save(proto, nParties, nHashes0, nHashesI, nBits, trueCard, cardComputed, times, resDir+"/timing.csv")
-
-	for _, v := range loggers {
-		v.SetPrefix("")
-		v.Println("-------------------------------------------")
-	}
 }
 
 // #############################################################################
