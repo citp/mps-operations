@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pkg/profile"
+	"github.com/spf13/viper"
 )
 
 // #############################################################################
@@ -115,18 +115,42 @@ func mainProtocol() {
 	var dataDir, resDir string
 	var eProfile, showP bool
 
-	flag.IntVar(&proto, "p", 1, "protocol (1 = MPSI-CA, 2 = MPSIU-CA)")
-	flag.IntVar(&nParties, "n", 3, "number of parties (excluding delegate)")
-	flag.IntVar(&nHashes0, "h0", 1000, "|x_0|")
-	flag.IntVar(&nHashesI, "hi", 10000, "|x_i|")
-	flag.IntVar(&intCard, "i", 1000, "|intersection(x_0,...,x_n)|")
-	flag.IntVar(&lim, "l", 1000, "upper bound on associated integers")
-	flag.IntVar(&nBits, "b", 17, "number of bits (hash map size = 2^b)")
-	flag.StringVar(&dataDir, "d", "data", "directory containing hashes")
-	flag.StringVar(&resDir, "r", "results", "results directory")
-	flag.BoolVar(&eProfile, "c", false, "enable profiling")
-	flag.BoolVar(&showP, "g", false, "show progress")
-	flag.Parse()
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	Panic(viper.ReadInConfig())
+
+	switch viper.GetString("protocol") {
+	case "MPSI-CA":
+		proto = 1
+	case "MPSIU-CA":
+		proto = 2
+	}
+
+	nParties = viper.GetInt("n")
+	nHashes0 = viper.GetInt("x0")
+	nHashesI = viper.GetInt("xi")
+	intCard = viper.GetInt("i")
+	lim = viper.GetInt("l")
+	nBits = viper.GetInt("b")
+
+	dataDir = viper.GetString("data_dir")
+	resDir = viper.GetString("result_dir")
+
+	eProfile = viper.GetBool("profile")
+	showP = viper.GetBool("progress")
+
+	// flag.IntVar(&proto, "p", 1, "protocol (1 = MPSI-CA, 2 = MPSIU-CA)")
+	// flag.IntVar(&nParties, "n", 3, "number of parties (excluding delegate)")
+	// flag.IntVar(&nHashes0, "h0", 1000, "|x_0|")
+	// flag.IntVar(&nHashesI, "hi", 10000, "|x_i|")
+	// flag.IntVar(&intCard, "i", 1000, "|intersection(x_0,...,x_n)|")
+	// flag.IntVar(&lim, "l", 1000, "upper bound on associated integers")
+	// flag.IntVar(&nBits, "b", 17, "number of bits (hash map size = 2^b)")
+	// flag.StringVar(&dataDir, "d", "data", "directory containing hashes")
+	// flag.StringVar(&resDir, "r", "results", "results directory")
+	// flag.BoolVar(&eProfile, "c", false, "enable profiling")
+	// flag.BoolVar(&showP, "g", false, "show progress")
+	// flag.Parse()
 
 	Assert(proto == 1 || proto == 2)
 	Assert(nParties > 1)
