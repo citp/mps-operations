@@ -1,13 +1,13 @@
 # Multiparty Private Set Operations
 
 ## Requirements
- * `go` $>= 1.18$ or `docker`
+ * `go` $\geq$ 1.18 or `docker`
 
 ## Protocols
-1. MPSI (`MPSI`)
-2. MPSI-Sum (`MPSI-Sum`)
-3. MPSIU (`MPSIU`)
-4. MPSIU-Sum (`MPSIU-Sum`)
+1. `MPSI` 
+2. `MPSI-Sum` 
+3. `MPSIU` 
+4. `MPSIU-Sum`
 
 ## Usage
 
