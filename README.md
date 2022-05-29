@@ -16,7 +16,7 @@ Update `config.yml` as desired.
 ### Native
 
 ```
-go build; ./mps_operations
+go build -v -o mps_operations && ./mps_operations
 ```
 
 ### Docker
