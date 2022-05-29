@@ -1,12 +1,12 @@
 # Required
-protocol: "MPSI-Sum"         # MPSI / MPSI-Sum / MPSIU, / MPSIU-Sum
+protocol: "MPSI"     # MPSI / MPSI-Sum / MPSIU, / MPSIU-Sum
 n: 3                     # Number of parties
 x0: 1000                 # |X_0|
 xi: 10000                # |X_i|
 i: 1000                  # |intersection(x_0,...,x_n)|
 b: 17                    # number of bits in the hash map size
-data_dir: "data"         # directory containing identifiers
-result_dir: "results"    # results directory
+data_dir: "./data"         # directory containing identifiers
+result_dir: "./results"    # results directory
 l: 1000                  # upper bound on associated integers (MPSIU-S)
 
 # Optional

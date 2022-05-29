@@ -1,17 +1,15 @@
-# Multiparty Private Set Cardinality Operations
+# Multiparty Private Set Operations
 
-## PROTOCOLS
-1. MPSI (`MPSI_`)
-2. MPSIU-Sum (`MPSIUS`)
+## Protocols
+1. MPSI (`MPSI`)
+2. MPSI-Sum (`MPSI-Sum`)
+3. MPSIU (`MPSIU`)
+4. MPSIU-Sum (`MPSIU-Sum`)
 
-## USAGE
-```
-go test -args -help
-```
+## Usage
 
-
-## TESTING
+Update `config.yml` as desired. Then run
 
 ```
-go test -timeout 0 -bench <protocol> -run=TestZ -args -x0 <|X_0|> -xi <|X_i|> -mbits <log_2(map size)> -mod <no. of CRT moduli> -log <path/to/log/file>
+go build; ./mps_operations
 ```

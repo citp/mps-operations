@@ -31,8 +31,8 @@ func PrintInfo(logger *log.Logger, protoName, dataDir, resDir string, nParties, 
 	logger.Printf("|X_i|%s%d\n", sep, nHashesI)
 	logger.Printf("|I|%s%d\n", sep, intCard)
 	logger.Printf("|M|%s%d\n", sep, 1<<nBits)
-	logger.Printf("Data%s./%s\n", sep, dataDir)
-	logger.Printf("Results%s./%s\n", sep, resDir)
+	logger.Printf("Data%s%s\n", sep, dataDir)
+	logger.Printf("Results%s%s\n", sep, resDir)
 	logger.Printf("Profile%s%s\n", sep, strconv.FormatBool(eProfile))
 }
 
@@ -120,14 +120,14 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 	fmt.Println("")
 
 	color.Set(delegate.party.log_color, color.Bold)
-	delegate.party.log.SetPrefix("{RESULT}\tParty 0 => ")
+	delegate.party.log.SetPrefix("{COST}\t\tParty 0 => ")
 	delegate.party.log.Printf("Computation: %d EC point mul.\n", delegate.party.TComputation(proto, &R))
 	delegate.party.log.Printf("Communication: %f MB\n", float64(delegate.party.TCommunication(&R))/1e6)
 	color.Unset()
 
 	for i := 0; i < nParties; i++ {
 		color.Set(parties[i].log_color, color.Bold)
-		parties[i].log.SetPrefix(fmt.Sprintf("{RESULT}\tParty %d => ", parties[i].id))
+		parties[i].log.SetPrefix(fmt.Sprintf("{COST}\t\tParty %d => ", parties[i].id))
 		parties[i].log.Printf("Computation: %d EC point mul.\n", parties[i].TComputation(proto, &R))
 		parties[i].log.Printf("Communication: %f MB\n", float64(delegate.party.TCommunication(&R))/1e6)
 		color.Unset()
@@ -141,8 +141,8 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 func main() {
 	color.Set(color.FgBlue, color.Bold, color.Underline)
 	fmt.Println("Multiparty Private Set Operations")
-	color.Unset()
 	fmt.Println("")
+	color.Unset()
 
 	var nParties, nHashes0, nHashesI, intCard, lim, nBits, proto int
 	var dataDir, resDir string
@@ -226,7 +226,10 @@ func main() {
 	}
 	color.Unset()
 
-	Save(proto, nParties, nHashes0, nHashesI, nBits, trueCard, cardComputed, times, resDir+"/timing.csv")
+	Save(proto, nParties, nHashes0, nHashesI, nBits, trueCard, cardComputed, times, resDir+"/bench.csv")
+
+	color.Set(color.FgBlue)
+	fmt.Printf("\nBenchmark written to %s/bench.csv\n", resDir)
 }
 
 // #############################################################################
