@@ -62,18 +62,31 @@ func (p *Party) TCommunication(R *HashMapValues) uint64 {
 // #############################################################################
 
 func (p *Party) Init(id, n, nBits int, dPath, lPath string, ctx *EGContext) {
-	logF, err := os.OpenFile(lPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	Panic(err)
-	p.log = log.New(logF, fmt.Sprintf("[Party %d] ", id), 0)
+	// logF, err := os.OpenFile(lPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	// Panic(err)
+
+	// p.log = log.New(logF, fmt.Sprintf("[Party %d] ", id), 0)
+	p.id = id
+
+	if p.id <= 5 {
+		p.log_color = map[int]color.Attribute{0: color.FgHiRed, 1: color.FgHiCyan, 2: color.FgHiYellow, 3: color.FgHiGreen, 4: color.FgHiBlue, 5: color.FgHiMagenta}[p.id]
+	} else {
+		p.log_color = color.FgHiWhite
+	}
+
+	color.Set(p.log_color)
+	defer color.Unset()
+
+	p.log = log.New(os.Stdout, fmt.Sprintf("{LOG}\t\tParty %d => ", p.id), 0)
 	defer Timer(time.Now(), p.log, "Init")
 
-	p.id = id
 	p.n = n
 	p.nBits = nBits
 	p.ctx = *ctx
 	p.X = ReadFile(dPath)
-	p.showP = false
 	p.partial_sk = ctx.ecc.RandomScalar()
+
+	var err error
 	p.h2c, err = NewHtoCParams("P256_XMD:SHA-256_SSWU_RO_")
 	Panic(err)
 }
@@ -139,14 +152,16 @@ func (p *Party) Shuffle(R *HashMapFinal) {
 		R.Q[i], R.Q[j] = R.Q[j], R.Q[i]
 		R.AES[i], R.AES[j] = R.AES[j], R.AES[i]
 	})
-	p.log.Printf("shuffled slots=%d\n", len(R.Q))
+	p.log.Printf("Shuffled %d slots\n", len(R.Q))
 }
 
 // #############################################################################
 
 // Multiparty Private Set Intersection (optionally, sum)
 func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) *HashMapFinal {
-	proto := "MPSI_S"
+	color.Set(p.log_color)
+
+	proto := "MPSI-Sum"
 	if !sum {
 		proto = "MPSI"
 	}
@@ -171,9 +186,8 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 
 	njobs := uint64(M.Size()) - unmodified.GetCardinality()
 	pool.nJobs = njobs
-	color.Red(fmt.Sprintf("{LOG}\t\tParty %d: Modified %d indices", p.id, njobs))
 
-	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", njobs, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(njobs)/float64(len(p.X)))
+	p.log.Printf("Modified %d slots (%.3f x expected)\n", njobs, float64(njobs)/E_FullSlots(float64(M.Size()), float64(len(p.X))))
 
 	dhCtx := DHCtx{ctx: &p.ctx.ecc, L: L, isP1: (p.id == 1), h2c: p.h2c}
 	p.RunParallel(R, pool, MPSIReduceWorker, dhCtx)
@@ -185,14 +199,16 @@ func (p *Party) MPSI(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) 
 		pool.InChan <- WorkerInput{id: k.Next(), data: RandomizeInput{}}
 	}
 	p.RunParallel(R, pool, RandomizeWorker, dhCtx)
-	p.log.Printf("randomized slots=%d\n", unmodified.GetCardinality())
+	p.log.Printf("Randomized %d slots\n", unmodified.GetCardinality())
 
 	// Shuffle and return B if you are P_{n-1}
 	return p.BlindEncrypt(M, R, sum)
 }
 
 func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool) *HashMapFinal {
-	proto := "MPSIU_S"
+	color.Set(p.log_color)
+
+	proto := "MPSIU-Sum"
 	if !sum {
 		proto = "MPSIU"
 	}
@@ -217,11 +233,10 @@ func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool)
 
 	njobs := uint64(M.Size()) - unmodified.GetCardinality()
 	pool.nJobs = njobs
-	fmt.Println("njobs", p.id, njobs)
-
 	dhCtx := DHCtx{ctx: &p.ctx.ecc, L: L, isP1: (p.id == 1), h2c: p.h2c}
 	modified := M.Size() - unmodified.GetCardinality()
-	p.log.Printf("modified slots=%d (expected=%f) / prop=%f\n", modified, E_FullSlots(float64(int(1)<<p.nBits), float64(len(p.X))), float64(modified)/float64(len(p.X)))
+
+	p.log.Printf("Modified %d slots (%.3f x expected)\n", modified, float64(modified)/E_FullSlots(float64(M.Size()), float64(len(p.X))))
 	p.RunParallel(R, pool, HashAndReduceWorker, dhCtx)
 
 	pool = NewWorkerPool(unmodified.GetCardinality())
@@ -243,11 +258,11 @@ func (p *Party) MPSIU(L DHElement, M *HashMapValues, R *HashMapValues, sum bool)
 	}
 
 	p.RunParallel(R, pool, workerFn, dhCtx)
-	op := "randomized"
+	op := "Randomized"
 	if p.id != 1 {
-		op = "reduced"
+		op = "Reduced"
 	}
-	p.log.Printf("%s unmodified slots=%d\n", op, unmodified.GetCardinality())
+	p.log.Printf("%s %d unmodified slots\n", op, unmodified.GetCardinality())
 
 	// Shuffle and return B if you are P_{n-1}
 	return p.BlindEncrypt(M, R, sum)

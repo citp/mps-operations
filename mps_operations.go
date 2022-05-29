@@ -19,7 +19,7 @@ import (
 
 func PrintInfo(logger *log.Logger, protoName, dataDir, resDir string, nParties, nHashes0, nHashesI, intCard, nBits int, eProfile bool) {
 
-	color.Set(color.FgBlue, color.Bold)
+	color.Set(color.FgGreen, color.Bold)
 	defer color.Unset()
 
 	sep := ": "
@@ -101,7 +101,6 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 	}
 
 	// Round2
-	fmt.Println("")
 	watch.Reset()
 	partials := make([][]DHElement, nParties+1)
 	cardComputed, ctSum := delegate.DelegateFinish(final, sum)
@@ -118,11 +117,20 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 		computedSum = delegate.JointDecryption(ctSum, partials)
 	}
 
+	fmt.Println("")
+
+	color.Set(delegate.party.log_color, color.Bold)
+	delegate.party.log.SetPrefix("{RESULT}\tParty 0 => ")
 	delegate.party.log.Printf("Computation: %d EC point mul.\n", delegate.party.TComputation(proto, &R))
 	delegate.party.log.Printf("Communication: %f MB\n", float64(delegate.party.TCommunication(&R))/1e6)
+	color.Unset()
+
 	for i := 0; i < nParties; i++ {
+		color.Set(parties[i].log_color, color.Bold)
+		parties[i].log.SetPrefix(fmt.Sprintf("{RESULT}\tParty %d => ", parties[i].id))
 		parties[i].log.Printf("Computation: %d EC point mul.\n", parties[i].TComputation(proto, &R))
 		parties[i].log.Printf("Communication: %f MB\n", float64(delegate.party.TCommunication(&R))/1e6)
+		color.Unset()
 	}
 
 	return float64(cardComputed), &computedSum, times
@@ -131,8 +139,8 @@ func RunProtocol(nParties int, delegate Delegate, parties []Party, proto int) (f
 // #############################################################################
 
 func main() {
-	color.Set(color.BgBlue, color.Bold, color.Underline)
-	color.Red("Multiparty Private Set Operations")
+	color.Set(color.FgBlue, color.Bold, color.Underline)
+	fmt.Println("Multiparty Private Set Operations")
 	color.Unset()
 	fmt.Println("")
 
@@ -147,11 +155,11 @@ func main() {
 	switch viper.GetString("protocol") {
 	case "MPSI":
 		proto = 0
-	case "MPSI-CA":
+	case "MPSI-Sum":
 		proto = 1
 	case "MPSIU":
 		proto = 2
-	case "MPSIU-CA":
+	case "MPSIU-Sum":
 		proto = 3
 	}
 
@@ -181,7 +189,7 @@ func main() {
 	var watch Stopwatch
 	var times []time.Duration
 	fpaths := make([]string, nParties+1)
-	protoName := []string{"MPSI", "MPSI-CA", "MPSIU", "MPSIU-CA"}
+	protoName := []string{"MPSI", "MPSI-Sum", "MPSIU", "MPSIU-Sum"}
 	for i := range fpaths {
 		fpaths[i] = path.Join(dataDir, fmt.Sprintf("%d.txt", i))
 	}
@@ -195,24 +203,28 @@ func main() {
 
 	times = append(times, watch.Elapsed())
 
-	delegate, parties, _times := RunInit(nParties, nBits, fpaths, resDir+"/log.txt")
-	times = append(times, _times...)
-
 	stdout := log.New(os.Stdout, "", 0)
 	stdout.SetPrefix("{CONFIG}\t")
 	PrintInfo(stdout, protoName[proto], dataDir, resDir, nParties, nHashes0, nHashesI, intCard, nBits, eProfile)
 	fmt.Println("")
 
+	delegate, parties, _times := RunInit(nParties, nBits, fpaths, resDir+"/log.txt")
+	times = append(times, _times...)
+
 	cardComputed, sumComputed, _times := RunProtocol(nParties, delegate, parties, proto)
 	times = append(times, _times...)
 
+	fmt.Println("")
+	color.Set(color.FgMagenta, color.Bold)
+
 	e1 := (cardComputed - trueCard) * 100 / trueCard
-	color.Green(fmt.Sprintf("{RESULT}\tCount: %d (%d, %f%%)", int(cardComputed), int(trueCard), e1))
+	fmt.Printf("{RESULT}\tCount => %d (True: %d / Error: %.2f%%)\n", int(cardComputed), int(trueCard), e1)
 
 	if proto%2 == 1 {
 		e2 := (float64(sumComputed.Int64()) - trueSum) * 100 / trueSum
-		color.Green(fmt.Sprintf("{RESULT}\tSum: %s (%d, %f%%)", sumComputed.Text(10), int(trueSum), e2))
+		fmt.Printf("{RESULT}\tSum => %s (True: %d / Error: %.2f%%)\n", sumComputed.Text(10), int(trueSum), e2)
 	}
+	color.Unset()
 
 	Save(proto, nParties, nHashes0, nHashesI, nBits, trueCard, cardComputed, times, resDir+"/timing.csv")
 }

@@ -5,6 +5,8 @@ import (
 	"log"
 	"math/big"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 // #############################################################################
@@ -17,7 +19,7 @@ type Party struct {
 	log          *log.Logger
 	partial_sk   *big.Int
 	h2c          *HtoCParams
-	showP        bool
+	log_color    color.Attribute
 }
 
 type Delegate struct {

@@ -3,6 +3,8 @@ package main
 import (
 	"math/big"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 // #############################################################################
@@ -27,6 +29,9 @@ func (d *Delegate) Init(id, n, nBits int, dPath, lPath string, ctx *EGContext) {
 }
 
 func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
+	color.Set(d.party.log_color)
+	defer color.Unset()
+
 	defer Timer(time.Now(), d.party.log, "DelegateStart")
 
 	*M = NewHashMap(d.party.nBits)
@@ -60,7 +65,7 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 		d.party.RunParallelDelegate(M, pool, BlindAESWorker, ctxInt)
 	}
 
-	d.party.log.Printf("filled slots=%d (expected=%f) / prop=%f\n", filled, E_FullSlots(float64(M.Size()), float64(len(d.party.X))), float64(filled)/float64(len(d.party.X)))
+	d.party.log.Printf("Filled %d slots (%.3f x expected)\n", filled, float64(filled)/E_FullSlots(float64(M.Size()), float64(len(d.party.X))))
 
 	pool = NewWorkerPool(unmodified.GetCardinality())
 	k := unmodified.Iterator()
@@ -72,10 +77,11 @@ func (d *Delegate) DelegateStart(M *HashMapValues, sum bool) {
 	} else {
 		d.party.RunParallelDelegate(M, pool, RandomizeAESDelegateWorker, ctxInt)
 	}
-	d.party.log.Printf("randomized slots=%d\n", unmodified.GetCardinality())
+	d.party.log.Printf("Randomized %d unmodified slots\n", unmodified.GetCardinality())
 }
 
 func (d *Delegate) DelegateFinish(R *HashMapFinal, sum bool) (int, *EGCiphertext) {
+	color.Set(d.party.log_color)
 	defer Timer(time.Now(), d.party.log, "DelegateFinish")
 
 	sz := len(R.Q)
@@ -121,6 +127,7 @@ func (d *Delegate) DelegateFinish(R *HashMapFinal, sum bool) (int, *EGCiphertext
 }
 
 func (d *Delegate) JointDecryption(ctSum *EGCiphertext, partials [][]DHElement) big.Int {
+	color.Set(d.party.log_color)
 	defer Timer(time.Now(), d.party.log, "JointDecryption")
 
 	var result big.Int

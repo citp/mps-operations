@@ -203,7 +203,6 @@ func (d *SampleData) GenerateI(N0, Ni, intCard, lim int) {
 		Assert(len(d.X_ADs[i]) == rem)
 	}
 
-	// fmt.Println(len(sets))
 	inter := &sets[0]
 	for i := 1; i < nParties; i++ {
 		inter = inter.Intersection(&sets[i])
@@ -304,7 +303,7 @@ func Panic(err error) {
 
 func Timer(start time.Time, log *log.Logger, text string) {
 	elapsed := time.Since(start)
-	log.Printf("%s: %s", text, elapsed)
+	log.Printf("%s took %s", text, elapsed)
 }
 
 func (w *Stopwatch) Reset() {
@@ -447,38 +446,4 @@ func Cardinality(X_ADs []map[string]int, mpsi bool) []int {
 
 func E_FullSlots(n, N0 float64) float64 {
 	return float64(n) * (1.0 - math.Pow((float64(n)-1.0)/float64(n), float64(N0)))
-}
-
-func E_SlotCollision(m, s, xi float64) float64 {
-	return s * (1.0 - math.Pow(((m-s)/m), xi))
-}
-
-func E_Collisions(m, x float64) float64 {
-	return x - m + (m * math.Pow((1.0-(1.0/m)), x))
-}
-
-func E_Intersection(m, x0, xi, i0, i float64, nParties int, mpsi bool) float64 {
-	return E_FN(m, x0, xi, i, nParties, mpsi) + E_FP(m, x0, xi, i0, i, nParties, mpsi)
-}
-
-// nParties does not include delegate
-func E_FP(m, x0, xi, i0, i float64, nParties int, mpsi bool) float64 {
-	if mpsi {
-		return E_FullSlots(m, i0-i) * math.Pow((E_FullSlots(m, xi-i)/m), float64(nParties-1))
-	}
-	return 0
-}
-
-// nParties does not include delegate
-func E_FN(m, x0, xi, i float64, nParties int, mpsi bool) float64 {
-	fnRate := (1 - E_FullSlots(m, x0)/float64(x0))
-
-	// fmt.Println(m, x0, xi, i, nParties, mpsi)
-	if !mpsi {
-		xi *= float64(nParties)
-		xi -= i
-		// fmt.Println(xi)
-	}
-	fnRate += (1 - E_FullSlots(m, xi)/float64(xi))
-	return float64(i) * (1 - fnRate)
 }
