@@ -1,0 +1,13 @@
+# Required
+protocol: "MPSI-Sum"        # MPSI / MPSI-Sum / MPSIU / MPSIU-Sum
+n: 3                        # Number of parties (excluding delegate)
+x0: 32768                   # Size of delegate's input set
+xi: 32768                   # Size of non-delegates' input sets
+i: 1024                     # Size of the intersection
+b: 17                       # Number of bits in the size of the hash map
+data_dir: "./data"          # Directory containing identifiers
+result_dir: "./results"     # Directory used to store results
+l: 1024                     # Upper bound on associated integers (for MPSI-Sum / MPSIU-Sum)
+
+# Optional
+profile: false              # Disable profiling

@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+title: Multiparty Private Set Operations
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+abstract: A Go implementation of protocols for MPSI, MPSIU, MPSI-Sum, and MPSIU-Sum. 
+authors:
+  - given-names: Anunay
+    family-names: Kulshrestha
+    affiliation: Princeton University
+  - given-names: Jonathan
+    family-names: Mayer
+    affiliation: Princeton University
+repository-code: "https://github.com/citp/mps-operations"
+date-released: "2022-06-23"
