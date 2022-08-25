@@ -30,15 +30,15 @@ Update `config.yml` as desired
 
 ```
 # Required
-protocol: "MPSI-Sum"        # MPSI / MPSI-Sum / MPSIU / MPSIU-Sum
-n: 3                        # Number of parties (excluding delegate)
+protocol: "MPSI-Sum"        # Protocol to run: MPSI / MPSI-Sum / MPSIU / MPSIU-Sum
+n: 3                        # Number of participants (excluding delegate)
 x0: 32768                   # Size of delegate's input set
 xi: 32768                   # Size of non-delegates' input sets
-i: 1024                     # Size of the intersection
-b: 17                       # Number of bits in the size of the hash map
-data_dir: "./data"          # Directory containing identifiers
-result_dir: "./results"     # Directory used to store results
-l: 1024                     # Upper bound on associated integers (for MPSI-Sum / MPSIU-Sum)
+i: 1024                     # Size of the intersection / intersection-with-union
+b: 17                       # log_2(Size of hash map)
+data_dir: "./data"          # Location of generated identifiers
+result_dir: "./results"     # Location of results
+l: 1024                     # Upper bound on generated associated integers (for MPSI-Sum / MPSIU-Sum)
 
 # Optional
 profile: false              # Disable profiling
